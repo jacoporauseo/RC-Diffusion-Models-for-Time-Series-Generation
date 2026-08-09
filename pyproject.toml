@@ -1,0 +1,4 @@
+[project]
+name = 'reservoir ddpm'
+version =  0.1 
+dependencies = []

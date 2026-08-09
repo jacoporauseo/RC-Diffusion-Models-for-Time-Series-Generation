@@ -19,7 +19,7 @@ class DiffusionEmbedding(nn.Module):
         self.projection2 = nn.Linear(proj_dim, proj_dim)
 
     def forward(self, diffusion_step):
-        x = self.embedding[diffusion_step]
+        x = self.embedding[diffusion_step] # type: ignore
         x = self.projection1(x)
         x = F.silu(x)
         x = self.projection2(x)

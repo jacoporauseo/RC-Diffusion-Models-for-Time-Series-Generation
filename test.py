@@ -1,4 +1,4 @@
-from TimeGradUtils.epsilon_theta import EpsilonTheta 
+from src.denoisers.epsilon_theta import EpsilonTheta 
 from TimeGradUtils.denoisingRNN import TimeGradRNN_FH 
 import torch 
 

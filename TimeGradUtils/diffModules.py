@@ -49,14 +49,6 @@ class BaseScheduler(nn.Module):
         self.register_buffer("alpha_bar", alphas_cumprod)
 
 
-class Diffusion(ABC):
-    """Class to be completed"""
-
-    @abstractmethod
-    def q_sample(self, x_0: torch.Tensor, k: int, noise = None):
-        pass
-
-
 class DDPM:
     """The idea for the class is taken from KAIST Diffusion Model Course"""
     def __init__(self, scheduler : BaseScheduler):

@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import numpy as np 
-from typing import Tuple, List
-from tqdm import tqdm 
-from abc import ABC, abstractmethod
 
 class BaseScheduler(nn.Module):
     """
@@ -24,12 +21,12 @@ class BaseScheduler(nn.Module):
         beta_K : float = 0.1, # Rasul et al. from 1*10^-4 to 0.1 (different from DDPM)
         s : float = 0.008,
         mode: str = "linear",
-    ):
+        ):
         super().__init__()
         self.K = K
         self.timesteps = torch.from_numpy(
             np.arange(0, self.K)[::-1].copy().astype(np.int64)
-        )
+            )
 
         if mode == "linear":
             betas = torch.linspace(beta_1, beta_K, steps=K)
