@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 
 class DiffusionEmbedding(nn.Module):
-    def __init__(self, dim, proj_dim, max_steps=500):
+    def __init__(self, dim : int, proj_dim : int, max_steps : int=500):
         super().__init__()
         self.register_buffer(
             "embedding", self._build_embedding(dim, max_steps), persistent=False

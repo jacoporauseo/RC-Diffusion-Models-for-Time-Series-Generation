@@ -1,4 +1,4 @@
-from TimeGradUtils.ArProcess import AR1 
+from tests.ArProcess import AR1 
 from scipy.stats import wasserstein_distance
 import numpy as np 
 import torch 

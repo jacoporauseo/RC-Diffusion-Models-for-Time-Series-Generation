@@ -6,7 +6,7 @@ from typing import Tuple
 class NoiseProcess(ABC):
 
     @abstractmethod
-    def q_sample(self, x: torch.Tensor, k : int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def q_sample(self, x_0 : torch.Tensor, k : torch.Tensor | int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample from `q(x_t^{k}|x_t)`. From DDPM of `Ho et al. (2020)`: \n
                                 x_t^k ~ q(x_t^k | x_t) 
@@ -26,17 +26,27 @@ class NoiseProcess(ABC):
         """
         pass 
 
-    @abstractmethod
-    def marginal_prob(self, x_0: torch.Tensor, t):
-        """Returns (mean, std) of p(x_t | x_0) — used by both q_sample and loss weighting."""
-        ...
+    # @abstractmethod
+    # def marginal_prob(self, x_0: torch.Tensor, t):
+    #     """Returns (mean, std) of p(x_t | x_0) — used by both q_sample and loss weighting."""
+    #     ...
 
-    @abstractmethod
-    def prior_sampling(self, shape) -> torch.Tensor:
-        """Sample x_T ~ N(0, I) or whatever the terminal distribution is."""
-        ...
+    # @abstractmethod
+    # def prior_sampling(self, shape) -> torch.Tensor:
+    #     """Sample x_T ~ N(0, I) or whatever the terminal distribution is."""
+    #     ...
 
-    @abstractmethod
-    def sample_timesteps(self, batch_size: int):
-        """Discrete: randint(0,K). Continuous: uniform(eps, 1)."""
-        ...
+    # @abstractmethod
+    # def sample_timesteps(self, batch_size: int):
+    #     """Discrete: randint(0,K). Continuous: uniform(eps, 1)."""
+    #     ...
+
+
+def extract(input, t: torch.Tensor, x: torch.Tensor):
+    if t.ndim == 0:
+        t = t.unsqueeze(0)
+    shape = x.shape
+    t = t.long().to(input.device)
+    out = torch.gather(input, 0, t)
+    reshape = [t.shape[0]] + [1] * (len(shape) - 1)
+    return out.reshape(*reshape)

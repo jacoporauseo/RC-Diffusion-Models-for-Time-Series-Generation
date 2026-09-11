@@ -16,6 +16,7 @@ class AR1(ABC):
     def conditional_pdf(self, x: np.ndarray, c:float):
         """Conditional pdf given x_{t-1}"""
         pass
+
     def sample_prev(self,T:int): 
         """Return an array of shape [T,2] with [x_t,x_{t-1}]"""
         x = self.generate_trajectory(T = T + 1)
@@ -25,7 +26,7 @@ class AR1(ABC):
 
 class AR_normal(AR1):
     """Class for AR1 process using Normal innovations"""
-    def __init__(self, phi=0.8, sigma=1, seed = 123):
+    def __init__(self, phi=0.8, sigma=1):
         self.phi = phi
         self.sigma = sigma  # standard deviation
 
