@@ -14,7 +14,7 @@ class DDPM(NoiseProcess):
     """
 
     def __init__(self, scheduler : BaseScheduler):
-        self.scheduler = scheduler # already assign the class? no 
+        self.scheduler = scheduler 
 
     def q_sample(self, x_0 : torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -25,7 +25,7 @@ class DDPM(NoiseProcess):
 
         Parameters
         ---------
-            x (torch.Tensor) : time series observations `x_t` of shape `[T, N]`
+            x_0 (torch.Tensor) : time series observations `x_t` of shape `[T, N]`
             k (torch.Tensor) : torch tensor of `long` type that gives the diffusion step 
                                     
         Returns
