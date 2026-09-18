@@ -19,6 +19,7 @@ class DiffusionEmbedding(nn.Module):
         self.projection2 = nn.Linear(proj_dim, proj_dim)
 
     def forward(self, diffusion_step):
+        # get fix embedding
         x = self.embedding[diffusion_step] # type: ignore
         x = self.projection1(x)
         x = F.silu(x)
@@ -26,7 +27,10 @@ class DiffusionEmbedding(nn.Module):
         x = F.silu(x)
         return x
 
-    def _build_embedding(self, dim, max_steps):
+    def _build_embedding(self, dim : int, max_steps : int):
+        """ 
+        Fix embedding
+        """
         steps = torch.arange(max_steps).unsqueeze(1)  # [T,1]
         dims = torch.arange(dim).unsqueeze(0)  # [1,dim]
         table = steps * 10.0 ** (dims * 4.0 / dim)  # [T,dim]
@@ -123,11 +127,11 @@ class EpsilonTheta(nn.Module):
         nn.init.kaiming_normal_(self.skip_projection.weight)
         nn.init.zeros_(self.output_projection.weight)
 
-    def forward(self, inputs, time, cond):
-        x = self.input_projection(inputs)
+    def forward(self, x : torch.Tensor, k : torch.Tensor, cond : torch.Tensor):
+        x = self.input_projection(x)
         x = F.leaky_relu(x, 0.4)
 
-        diffusion_step = self.diffusion_embedding(time)
+        diffusion_step = self.diffusion_embedding(k)
         cond_up = self.cond_upsampler(cond)
         skip = []
         for layer in self.residual_layers:

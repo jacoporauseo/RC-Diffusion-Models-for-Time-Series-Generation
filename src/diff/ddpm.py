@@ -7,10 +7,8 @@ from src.diff.noise_process import NoiseProcess
 
 
 class DDPM(NoiseProcess):
-
     """
     DDPM Diffusion Process. From original paper of  `Ho et al. (2020)`.
-    
     """
 
     def __init__(self, scheduler : BaseScheduler):
@@ -19,13 +17,14 @@ class DDPM(NoiseProcess):
     def q_sample(self, x_0 : torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample from `q(x_t^{k}|x_t)`. From DDPM of `Ho et al. (2020)`: \n
-                                x_t^k ~ q(x_t^k | x_t) 
+                                x_t^k ~ q(x_t^k | x_t)
         By using the reparameterization trick this distribution is: \n
-                        x_t^k = sqrt(ᾱ_k) * x_t + sqrt(1 - ᾱ_k) * ε    ε ~ N(0, I_N)
+                    x_t^k = sqrt(ᾱ_k) * x_t + sqrt(1 - ᾱ_k) * ε    ε ~ N(0, I_N)
 
         Parameters
         ---------
-            x_0 (torch.Tensor) : time series observations `x_t` of shape `[T, N]`
+            x_0 (torch.Tensor) : time series observations `x_t` of shape `[T, N]` or a batch of 
+                                 shape `(B, N)
             k (torch.Tensor) : torch tensor of `long` type that gives the diffusion step 
                                     
         Returns
@@ -35,7 +34,8 @@ class DDPM(NoiseProcess):
         """
             
         epsilon = torch.randn_like(x_0)
-        alpha_bar_k = self.scheduler.alpha_bar[k].view(-1, 1) #type: ignore
+        alpha_bar_k = self.scheduler.get_alpha_bar(k, x_shape=x_0.shape)
+        # alpha_bar_k = self.scheduler.alpha_bar[k].view(-1, 1) #type: ignore
         x_t = torch.sqrt(alpha_bar_k) * x_0 + torch.sqrt(1 - alpha_bar_k) * epsilon
         return x_t, epsilon
 
@@ -60,16 +60,13 @@ class DDPM(NoiseProcess):
         alpha_k     = self.scheduler.alpha[k] # type: ignore
         alpha_bar_k = self.scheduler.alpha_bar[k] # type: ignore
         beta_k      = self.scheduler.betas[k] # type: ignore
-        # \bar{\alpha_{k-1}}: 
-        alpha_bar_k_prev = self.scheduler.betas[k-1] # type: ignore
+        beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
+        # alpha_bar_k_prev = self.scheduler.betas[k-1] # was wrong
 
         mu = (1 / torch.sqrt(alpha_k)) * (x_t - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
         if k > 0:
             z = torch.randn_like(x_t)
-            # sigma_k = torch.sqrt(beta_k) # kind of equal to using beta_tilde_k since approx equals
-            # or use
-            beta_tilde_k = (1-alpha_bar_k_prev)/(1-alpha_bar_k)*beta_k
             sigma_k = torch.sqrt(beta_tilde_k)
             x_prev = mu + sigma_k * z
         else:

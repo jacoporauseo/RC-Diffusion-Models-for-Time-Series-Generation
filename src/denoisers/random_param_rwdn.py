@@ -1,7 +1,9 @@
 import torch 
 import torch.nn as nn
 from typing import Tuple
-from EsnUtils.ParametersESN import RandomWeight
+from old.EsnUtils.ParametersESN import RandomWeight
+
+
 
 def draw(shape: Tuple[int, int, int], dist: str, sparsity: float = 0.0, norm_type: str = 'spectral_radius') -> torch.Tensor:
     """

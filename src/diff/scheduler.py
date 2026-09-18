@@ -2,20 +2,20 @@ import torch
 import torch.nn as nn
 import numpy as np 
 
-# TODO: to add beta_tilde? 
-
 
 class BaseScheduler(nn.Module):
-    """
-    Variance scheduler of DDPM. It defines the variance schedule 
+    r"""
+    Variance scheduler of DDPM. It defines the variance schedule for the process. For now it covers
+    the main part of DDPMs. Not sure for DDIM or SDE-diffusion (pay attention of the different notation 
+    there). 
 
-    Parameters 
+    Properties
     ---------
-        K (int) : number of diffusion steps
-        beta_1 (float) : starting value for the variance schedule *Default* 1e-4 in TimeGrad)
-        beta_K (float) : final value for the variance schedule. *Default* 0.1 in TimeGrad)
-        s (float) : adj in the cosine schedule
-        mode (str) : available `['linear', 'cosine', 'quad']`. *Default* linear as in TimeGrad
+        beta : a (K,) tensor with the variance schedule of the forward process
+        alpha : a (K,) tensor with 1 - beta_k 
+        alpha_bar : a (K, ) tensor that is the cumulative product of alpha
+        beta_tilde : a (K,) tensor with the variance of the reverse process
+
     """
     def __init__(
         self,
@@ -25,6 +25,17 @@ class BaseScheduler(nn.Module):
         s : float = 0.008,
         mode: str = "linear",
         ):
+        """
+        Constructor for the scheduler
+
+        Parameters 
+        ---------
+            K (int) : number of diffusion steps
+            beta_1 (float) : starting value for the variance schedule *Default* 1e-4 in TimeGrad)
+            beta_K (float) : final value for the variance schedule. *Default* 0.1 in TimeGrad)
+            s (float) : adj in the cosine schedule
+            mode (str) : available `['linear', 'cosine', 'quad']`. *Default* linear as in TimeGrad
+        """
         super().__init__()
         self.K = K
         self.timesteps = torch.from_numpy(

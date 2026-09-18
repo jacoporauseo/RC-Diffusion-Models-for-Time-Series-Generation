@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from abc import ABC, abstractmethod 
-from EsnUtils.ParametersESN import ParametersESN
+from old.EsnUtils.ParametersESN import ParametersESN
 from typing import List, Tuple
 import math 
 from dataclasses import dataclass
@@ -74,7 +74,7 @@ class ESN(nn.Module):
         s = torch.zeros(self.reservoir_size, 1) # s_0 (reservoir_state,1)
         states = []
         for t in range(T):
-            s = self.leak_rate * s + (1 - self.leak_rate) * self.activ(self.A @ s + self.C @ X[t].reshape(-1,1) + self.zeta)
+            s = self.leak_rate * s + (1 - self.leak_rate) * self.activ(self.A @ s + self.C @ X[t].reshape(-1,1) + self.zeta) #type: ignore
             states.append(s) # [s_1, ..., s_T]
         S = torch.stack(states)
         self.S = S.squeeze(-1) # (T, reservoir_size)
