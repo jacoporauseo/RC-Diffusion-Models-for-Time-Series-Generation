@@ -13,7 +13,7 @@ ourselves to remove the transient and reach the stationary distribution.
 import numpy as np
 import torch
 from statsmodels.tsa.vector_ar.var_model import VARProcess
-from src.data.ts_sim import TimeSeriesModel
+from rcdiff.data.ts_sim import TimeSeriesModel
 
 
 class VAR(TimeSeriesModel):

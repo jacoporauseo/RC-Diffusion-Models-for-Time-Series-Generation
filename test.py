@@ -1,34 +1,24 @@
-from src.diff.ddpm import DDPM 
-from src.diff.scheduler import BaseScheduler 
+from rcdiff.diff.ddpm import DDPM 
+from rcdiff.diff.scheduler import BaseScheduler 
 import torch 
-from src.data.var import * 
+from rcdiff.data.var import * 
 
 
 K = 100
 T = 1e4 
 N = 4 
 
+scheduler = BaseScheduler(K = 1000)
+ddpm = DDPM(scheduler)
+
 
 if __name__ == '__main__':
-    N = 3      # number of variables
-    p = 2      # VAR order p
-    n_obs = 500      # observations to keep
-    seed = 42
-    
-    A_list = generate_stable_var(N, p, scale=0.5,
-                                    target_radius=0.9, seed=seed)
-    
-    mu = np.zeros(N)                 # zero intercept -> series fluctuate around 0
-    cov = np.eye(N) * 0.5           # innovation covariance
-    
-    y = simulate_var(A_list, mu, cov, n_obs=n_obs, burn_in=500, seed=seed)
-    print(type(y))
-    print(y)
-    print(y.shape)
-    scheduler = BaseScheduler(K = 100)
-    ddpm = DDPM(scheduler)
-
-
+    k = 23
+    x_k = torch.randn(size = (100,1))
+    k_tensor = torch.tensor([k]).expand(x_k.shape[0])
+    alpha_bar = scheduler.get_alpha_bar(k_tensor, x_shape = x_k.shape)
+    print(alpha_bar.shape)
+    print(alpha_bar)
 
 
 

@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 from rcdiff import BaseScheduler 
 from rcdiff import DDPM 
-from rcdiff.diff.noise_process import NoiseProcess
+from rcdiff.diff.diffusion import Diffusion
 from typing import Final
 from rcdiff.data.ar import ARMA 
 
@@ -43,7 +43,7 @@ def plot_series(y : torch.Tensor):
 
 def plot_forward_process(
     y: torch.Tensor,
-    noise: NoiseProcess,
+    noise: Diffusion,
     steps: list[int] = [0, 11, 49, 99],
 ):
     """

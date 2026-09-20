@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod 
 import torch 
 from typing import Tuple 
+from rcdiff.diff.scheduler import BaseScheduler
 
+class Diffusion(ABC):
 
-class NoiseProcess(ABC):
+    def __init__(self, scheduler : BaseScheduler) -> None:
+        super().__init__()
+        self.scheduler = scheduler
 
     @abstractmethod
     def q_sample(self, x_0 : torch.Tensor, k : torch.Tensor | int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -27,19 +31,11 @@ class NoiseProcess(ABC):
         pass 
 
     # @abstractmethod
-    # def marginal_prob(self, x_0: torch.Tensor, t):
-    #     """Returns (mean, std) of p(x_t | x_0) — used by both q_sample and loss weighting."""
-    #     ...
-
-    # @abstractmethod
-    # def prior_sampling(self, shape) -> torch.Tensor:
-    #     """Sample x_T ~ N(0, I) or whatever the terminal distribution is."""
-    #     ...
-
-    # @abstractmethod
-    # def sample_timesteps(self, batch_size: int):
-    #     """Discrete: randint(0,K). Continuous: uniform(eps, 1)."""
-    #     ...
+    def p_sample(self,): 
+        """ 
+        Reverse posterior
+        """
+        pass 
 
 
 def extract(input, t: torch.Tensor, x: torch.Tensor):

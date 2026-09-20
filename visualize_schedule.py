@@ -1,4 +1,4 @@
-from src.diff.scheduler import BaseScheduler
+from src.rcdiff.diff.scheduler import BaseScheduler
 import torch 
 import matplotlib.pyplot as plt 
 from typing import Final

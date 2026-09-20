@@ -2,17 +2,17 @@ import torch
 from typing import Tuple
 
 from rcdiff.diff.scheduler import BaseScheduler 
-from rcdiff.diff.noise_process import NoiseProcess 
+from rcdiff.diff.diffusion import Diffusion 
 
 
 
-class DDPM(NoiseProcess):
+class DDPM(Diffusion):
     """
     DDPM Diffusion Process. From original paper of  `Ho et al. (2020)`.
     """
 
     def __init__(self, scheduler : BaseScheduler):
-        self.scheduler = scheduler 
+        super().__init__(scheduler=scheduler)
 
     def q_sample(self, x_0 : torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -41,7 +41,7 @@ class DDPM(NoiseProcess):
 
     @torch.no_grad()
     def p_sample(self, model, x_k: torch.Tensor, k : int, s : torch.Tensor) -> torch.Tensor:
-        """
+        r"""
         Sample from the reverse  `p(x_t^{k-1} | x_t^{k}) ~ N(μ,σ^2)`. From DDPM of 
         `Ho et al. (2020)`: \n
                 x_t^{k-1} | x_t^{k-1}, k, s_{t-1} ~ p_{θ}(x_t^{k-1} | x_t, s_{t-1}, k) 
@@ -64,16 +64,18 @@ class DDPM(NoiseProcess):
         Returns 
         ------
             x_prev (torch.Tensor) : the vector x^{k-1}_t of the noised version at step k-1
-
         """
         k_tensor = torch.tensor([k], device=x_k.device).expand(x_k.shape[0])
         eps = model(x_k, k_tensor, y=s)
-        
+
+        # can use the getters instead but nothing changes since here just need scalars
         alpha_k     = self.scheduler.alpha[k] # type: ignore
         alpha_bar_k = self.scheduler.alpha_bar[k] # type: ignore
         beta_k      = self.scheduler.beta[k] # type: ignore
         beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
-        # alpha_bar_k_prev = self.scheduler.betas[k-1] # was wrong
+
+        if k == 0: 
+            alpha_prev = 1
 
         mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
@@ -86,6 +88,7 @@ class DDPM(NoiseProcess):
 
         return x_prev
 
+    @torch.no_grad() 
     def reverse_process(self,
                         x : torch.Tensor,
                         s : torch.Tensor,
