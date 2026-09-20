@@ -9,4 +9,4 @@ docs/**/*
 old/**/*
 *.egg-info/
 *rcdiff.egg-info/* 
-rcdiff.egg-info
+src/rcdiff.egg-info
