@@ -40,7 +40,7 @@ class DDPM(NoiseProcess):
         return x_t, epsilon
 
     @torch.no_grad()
-    def p_sample(self, model, x_t: torch.Tensor, k : int, s : torch.Tensor) -> torch.Tensor:
+    def p_sample(self, model, x_k: torch.Tensor, k : int, s : torch.Tensor) -> torch.Tensor:
         """
         Sample from the reverse  `p(x_t^{k-1} | x_t^{k}) ~ N(μ,σ^2)`. From DDPM of 
         `Ho et al. (2020)`: \n
@@ -53,9 +53,21 @@ class DDPM(NoiseProcess):
                             σ^2 = (1-ᾱ_{k-1})/(1 - ᾱ_k) * β_k
         This for all `k` except the `k=1` case (in our code `k=0`) where the variance is zero. Another
         option in this case is to model the reverse process in `k=1` with an ad-hoc decoder. 
+
+        Parameters
+        ---------
+            x_k (torch.Tensor)  : the vector x^k_t of the noised version at step k
+            s (torch.Tensor)    : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
+            k (int)             : diffusion step k
+            model (nn.Module)   : denoisers model (U-Net, MLP, RWDN, etc.)
+
+        Returns 
+        ------
+            x_prev (torch.Tensor) : the vector x^{k-1}_t of the noised version at step k-1
+
         """
-        k_tensor = torch.tensor([k], device=x_t.device).expand(x_t.shape[0])
-        eps = model(x_t, k_tensor, y=s)
+        k_tensor = torch.tensor([k], device=x_k.device).expand(x_k.shape[0])
+        eps = model(x_k, k_tensor, y=s)
         
         alpha_k     = self.scheduler.alpha[k] # type: ignore
         alpha_bar_k = self.scheduler.alpha_bar[k] # type: ignore
@@ -63,14 +75,45 @@ class DDPM(NoiseProcess):
         beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
         # alpha_bar_k_prev = self.scheduler.betas[k-1] # was wrong
 
-        mu = (1 / torch.sqrt(alpha_k)) * (x_t - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
+        mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
         if k > 0:
-            z = torch.randn_like(x_t)
+            z = torch.randn_like(x_k)
             sigma_k = torch.sqrt(beta_tilde_k)
             x_prev = mu + sigma_k * z
         else:
             x_prev = mu 
 
         return x_prev
+
+    def reverse_process(self,
+                        x : torch.Tensor,
+                        s : torch.Tensor,
+                        denoiser : torch.nn.Module, 
+                        n_samples : int,
+                        ) -> Tuple[torch.Tensor, list]:
+        r""" 
+        Full Reverse Process of DDPM. Sample from p(x_t|s_{t-1}). 
+
+        Parameters
+        ---------
+            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N of shape (N,) or (N,1)
+            s (torch.Tensor)     : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
+            n_samples (int)      : the number of obs to sample
+            denoiser (nn.Module) : denoisers model (U-Net, MLP, RWDN, etc.)
+
+        Returns 
+        ------
+            x_k (torch.Tensor)  : the clean sample \hat{x}_t 
+            full_reverse (list) : list of the history of the reverse process for plotting 
+                                  and debugging 
+        """
+        N, _ = x.shape # (N,) of the target
+        final_shape = (n_samples, N)
+        x_k = torch.randn(size = final_shape)
+        full_reverse = [x_k]
+        for k in reversed(range(self.scheduler.K)):
+            x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s)
+            full_reverse.append(x_k)
+        return x_k, full_reverse
 
