@@ -1,12 +1,11 @@
 import numpy as np 
 import torch 
 import matplotlib.pyplot as plt
-from src.diff.scheduler import BaseScheduler 
-from src.diff.ddim import DDIM 
-from src.diff.ddpm import DDPM 
-from src.diff.noise_process import NoiseProcess
+from rcdiff import BaseScheduler 
+from rcdiff import DDPM 
+from rcdiff.diff.noise_process import NoiseProcess
 from typing import Final
-from src.data.ar import ARMA 
+from rcdiff.data.ar import ARMA 
 
 
 # plot forward process and chec

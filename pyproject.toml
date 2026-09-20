@@ -1,4 +1,11 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = 'reservoir ddpm'
-version =  0.1 
+name = "rcdiff"
+version = "0.1.0"
 dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

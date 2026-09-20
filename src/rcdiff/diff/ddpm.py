@@ -1,8 +1,8 @@
 import torch 
 from typing import Tuple
 
-from src.diff.scheduler import BaseScheduler 
-from src.diff.noise_process import NoiseProcess 
+from rcdiff.diff.scheduler import BaseScheduler 
+from rcdiff.diff.noise_process import NoiseProcess 
 
 
 
@@ -50,7 +50,7 @@ class DDPM(NoiseProcess):
         assumption that the variance schedule `β_k` is small. The mean of the reverse distribution is: \n
                 μ = 1/sqrt(α_k) * [x_t^{k} - (1-α_k)/sqrt(1 - ᾱ_k) * ε(x_t^{k}, s_{t-1}, k)]
         The variance is: \n
-                            σ^2 = (1-ᾱ_{k-1})/sqrt(1 - ᾱ_k) * β_k
+                            σ^2 = (1-ᾱ_{k-1})/(1 - ᾱ_k) * β_k
         This for all `k` except the `k=1` case (in our code `k=0`) where the variance is zero. Another
         option in this case is to model the reverse process in `k=1` with an ad-hoc decoder. 
         """
@@ -59,7 +59,7 @@ class DDPM(NoiseProcess):
         
         alpha_k     = self.scheduler.alpha[k] # type: ignore
         alpha_bar_k = self.scheduler.alpha_bar[k] # type: ignore
-        beta_k      = self.scheduler.betas[k] # type: ignore
+        beta_k      = self.scheduler.beta[k] # type: ignore
         beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
         # alpha_bar_k_prev = self.scheduler.betas[k-1] # was wrong
 

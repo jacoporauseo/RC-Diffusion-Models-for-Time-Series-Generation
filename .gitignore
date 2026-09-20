@@ -1,11 +1,12 @@
-.venv 
+.venv
 venv/
 __pycache__/
-*.pyc 
+*.pyc
 .myenv
 resources/**/*
 docs/**/*
 *.log
-old/*
 old/**/*
-docs/*
+*.egg-info/
+*rcdiff.egg-info/* 
+rcdiff.egg-info

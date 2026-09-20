@@ -20,8 +20,7 @@ convention.
 import numpy as np
 import torch
 from statsmodels.tsa.arima_process import ArmaProcess
-
-from src.data.ts_sim import TimeSeriesModel
+from rcdiff.data.ts_sim import TimeSeriesModel
 
 
 class ARMA(TimeSeriesModel):
