@@ -36,6 +36,7 @@ class DDPM(Diffusion):
         epsilon = torch.randn_like(x_0)
         alpha_bar_k = self.scheduler.get_alpha_bar(k, x_shape=x_0.shape)
         # alpha_bar_k = self.scheduler.alpha_bar[k].view(-1, 1) #type: ignore
+        print(alpha_bar_k.shape)
         x_t = torch.sqrt(alpha_bar_k) * x_0 + torch.sqrt(1 - alpha_bar_k) * epsilon
         return x_t, epsilon
 

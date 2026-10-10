@@ -1,25 +1,71 @@
 import torch 
 import torch.nn as nn 
 from dataclasses import dataclass, field
+import math 
+from typing import List
 
 
+import math
+import torch
+import torch.nn as nn
 
-@dataclass
-class TrainSpec:
-    """Module to handle training parameters and windows in TimeGrad"""
-    t0: int
-    Lookback: int
-    batch_size: int
-    epochs: int
-    valid_size : float = 0.2
-    patience: int = 30
-    lr: float = 1e-3
-    print_loss: bool = False
+# TimeEmbedding is unchanged from your file
 
-    def __post_init__(self):
-        """Method called authom after the init"""
-        if self.Lookback > self.t0:
-            raise ValueError("Lookback cannot be higher than t0")
+
+class SimpleMLP(nn.Module):
+    """
+    MLP denoiser eps_theta(x, k, s) with FiLM conditioning on the diffusion step.
+
+    Parameters
+    ----------
+        in_dim (int) : Dimension N of x (the output has the same dimension).
+        cond_dim (int) : Dimension of the conditioning vector s (e.g. the ESN reservoir size).
+        dim_hids (list[int]) : Widths of the hidden layers.
+        time_dim (int) : Width of the shared diffusion-step embedding.
+
+    
+    """
+    def __init__(self, 
+                 in_dim: int, 
+                 cond_dim: int, 
+                 dim_hids: list[int], 
+                 time_dim: int = 128
+                 ):
+        super().__init__()
+        self.in_dim, self.cond_dim = in_dim, cond_dim
+        self.time_emb = TimeEmbedding(time_dim)          # shared across layers
+
+        dims = [in_dim + cond_dim] + list(dim_hids)
+        self.fcs  = nn.ModuleList(nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1))
+        self.film = nn.ModuleList(nn.Linear(time_dim, 2 * dims[i + 1]) for i in range(len(dims) - 1))
+        self.out  = nn.Linear(dims[-1], in_dim) 
+        self.act  = nn.SiLU()
+
+    def forward(self, 
+                x: torch.Tensor, 
+                k: torch.Tensor, 
+                s: torch.Tensor
+                ) -> torch.Tensor:
+        """
+        Predict the noise
+
+        Parameters
+        ----------
+            x (torch.Tensor) : a batch of the noisy time series `x_t^k`, shape `(B, N)`
+            k (torch.Tensor) : a tensor containing the corr. diffusion step of `x`, shape `(B,)`
+            s (torch.Tensor) : the respective states from a SSM, i.e. `x_t -> s_{t-1}`, shape `(B, cond_dim)`
+        
+        Returns 
+        -------
+            eps_hat (torch.Tensor) : predicted noise as in DDPM, shape `(B, N)`.
+        """
+        emb = self.time_emb(k)                           # (B, time_dim) or (1, time_dim)
+        h = torch.cat([x, s], dim=-1)
+        for fc, film in zip(self.fcs, self.film):
+            scale, shift = film(emb).chunk(2, dim=-1)
+            h = self.act((1 + scale) * fc(h) + shift)
+        eps_hat = self.out(h)
+        return eps_hat
 
 
 class TimeEmbedding(nn.Module):
@@ -61,29 +107,26 @@ class TimeEmbedding(nn.Module):
             t_emb = self.mlp(t_freq)
             return t_emb
 
-class TimeLinear(nn.Module):
-    """
-    Multi-Layer Perception Network with FiLM 
-    """
-    def __init__(self, dim_in: int, dim_out: int, diffusion_steps : int):
-        super().__init__() 
-        self.dim_in = dim_in
-        self.dim_out = dim_out
-        self.diffusion_steps = diffusion_steps
 
-        self.time_embedding = TimeEmbedding(dim_out*2)
-        self.fc = nn.Linear(dim_in, dim_out)
 
-    def forward(self, x: torch.Tensor, k: torch.Tensor):
-        x = self.fc(x) 
-        emb = self.time_embedding(k).view(-1, self.dim_out * 2)
-        alpha, beta = emb.chunk(2, dim=-1)
-        return (1 + alpha) * x + beta 
 
-class DenoisingNetTimeGrad(nn.Module):
-    """DENOISING NETWORK FOR TIMEGRAD SIMPLE APPLICATION"""
 
-    def __init__(self, in_dim : int, hidden_size : int, dim_hids : List, num_timesteps : int):
+
+
+
+
+# ---------------------------------------------------------------------------------------
+# OLD code
+# ---------------------------------------------------------------------------------------
+
+class Denoiser(nn.Module):
+
+
+    def __init__(self, 
+                 in_dim : int, 
+                 hidden_size : int, 
+                 dim_hids : List[int], 
+                 num_timesteps : int):
         """
         in_dim : number of time series to noise equals dim_out (since we want to predict the noise on N ts)
         dim_hids : list of size of th
@@ -109,5 +152,27 @@ class DenoisingNetTimeGrad(nn.Module):
             if i < len(self.tlins) - 1:
                 x = self.act(x)
         return x
+
+
+class TimeLinear(nn.Module):
+    """
+    Multi-Layer Perception Network with FiLM 
+    """
+    def __init__(self, dim_in: int, dim_out: int, diffusion_steps : int):
+        super().__init__() 
+        self.dim_in = dim_in
+        self.dim_out = dim_out
+        self.diffusion_steps = diffusion_steps
+
+        self.time_embedding = TimeEmbedding(dim_out*2)
+        self.fc = nn.Linear(dim_in, dim_out)
+
+    def forward(self, x: torch.Tensor, k: torch.Tensor):
+        x = self.fc(x) 
+        emb = self.time_embedding(k).view(-1, self.dim_out * 2)
+        alpha, beta = emb.chunk(2, dim=-1)
+        return (1 + alpha) * x + beta 
+
+
 
 
