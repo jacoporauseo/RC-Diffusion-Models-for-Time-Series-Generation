@@ -1,2 +1,2 @@
-from src.rcdiff.models.random_params import ParametersESN 
-from src.rcdiff.models.random_params import ParametersRWDN 
+from rcdiff.models.random_params import RandomWeight, ParametersRWDN, ParametersESN
+from rcdiff.models.encoders import ESN

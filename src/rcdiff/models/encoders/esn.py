@@ -1,219 +1,117 @@
-import torch 
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from abc import ABC, abstractmethod 
-from old.EsnUtils.ParametersESN import ParametersESN
-from typing import List, Tuple
+from typing import Callable
+from rcdiff.models.random_params import ParametersESN
 
 
 class ESN(nn.Module):
-    """Echo State Network following to Ballarin et Grygoreva (2024)
-    s_t = alpha*s_{t-1} + (1-alpha)*sigma(A*s_{t-1} + C*x_t + zeta) $$
-    y_{t+1} = a + W^{T}*s_t + e_t 
     """
+    Leaky ESN used as a fixed (non-trainable) state generator, following Ballarin & Grigoryeva (2024):
+        s_t = alpha * s_{t-1} + (1 - alpha) * sigma(A s_{t-1} + C x_t + zeta),   s_0 = 0
+    alpha = leak_rate multiplies the PREVIOUS state (not Jaeger's convention).
+    """
+    A: torch.Tensor
+    C: torch.Tensor
+    zeta: torch.Tensor
+    activ: Callable[[torch.Tensor], torch.Tensor]
+
     def __init__(self, 
-                 in_dim :int,
-                 reservoir_size : int, 
-                 Params : ParametersESN,
-                 activ : str = 'tanh',
-                 output_layer : str = 'ridge',
-                 intercept = False, 
-                 alpha_rige = 1.0, 
+                 in_dim: int, 
+                 reservoir_size: int, 
+                 params: ParametersESN, 
+                 activ: str = 'tanh'
                  ):
-        super().__init__() 
-        self.in_dim = in_dim 
-        self.reservoir_size = reservoir_size 
-        self.leak_rate = Params.leak_rate 
-        self.intercept = intercept
-        self.alpha_rige = alpha_rige
-        self.Params = Params
+        super().__init__()
+        self.in_dim = in_dim
+        self.reservoir_size = reservoir_size
+        self.leak_rate = params.leak_rate
 
-        self._output_layer(output_layer)
-        self._activation_function(activ)
-        self._weights()
-    
-    def _activation_function(self, activ):
-        """Define the activation function"""
-        if activ == 'sigmoid':
-            self.activ = F.sigmoid
-        elif activ== 'tanh':
-            self.activ = F.tanh
+        if activ == 'tanh':
+            self.activ = torch.tanh
+        elif activ == 'sigmoid':
+            self.activ = torch.sigmoid
         else:
-            raise AttributeError(f"Valid attributes for the activation function: 'tanh', 'sigmoid'. Got {activ}")
+            raise ValueError(f"activ must be 'tanh' or 'sigmoid', got {activ}")
 
-    def _output_layer(self, output_layer : str):
+        A, C, zeta = params.sample(reservoir_size, in_dim)
+        self.register_buffer('A', A)                    # (R, R)
+        self.register_buffer('C', C)                    # (R, N)
+        self.register_buffer('zeta', zeta.squeeze(-1))  # (R,)
 
-        if output_layer == 'ols':
-            self.observation_map = OLS(in_dim=self.reservoir_size,intercept=self.intercept)
-        elif output_layer == 'ridge':
-            self.observation_map = Ridge(in_dim=self.reservoir_size,intercept=self.intercept, alpha=self.alpha_rige)
-        else:
-            raise AttributeError(f"Valid attributes for estimation method in the observation map: 'tanh', 'sigmoid'. Got {output_layer}")
+    def step(self, s: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        """One update. s: (B, R), x: (B, N) -> s_next: (B, R)."""
 
-    def _weights(self):
-        """Sample weights from appropriate laws according to the specification of the ParametersESN class"""
-        A, C, zeta = self.Params.sample(self.reservoir_size,self.in_dim)
-        self.register_buffer('A', A)
-        self.register_buffer('C', C)
-        self.register_buffer('zeta', zeta)
+        s_t_plus_1 = (self.leak_rate * s +
+                      (1.0 - self.leak_rate) * self.activ(s @ self.A.T + x @ self.C.T + self.zeta))
+
+        return s_t_plus_1
 
     @torch.no_grad()
-    def get_states(self, X : torch.Tensor):
-        """ 
-        Compute reservoir states s_t
-        X : (T,N) tensor of inputs
+    def get_states(self, X, s0=None, include_initial=False):
         """
-        T = X.shape[0]
-        s = torch.zeros(self.reservoir_size, 1) # s_0 (reservoir_state,1)
-        states = []
+        Compute the ESN states for a given input series.
+
+        The states are deterministic given the ESN parameters and the initial
+        state ``s0``.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            Inputs ``[x_1, ..., x_T]`` of shape ``(T, N)`` or ``(B, T, N)``.
+        s0 : torch.Tensor or None, default None
+            Initial state ``s_0`` of shape ``(B, R)``. If None, zeros.
+        include_initial : bool, default False
+            If True, ``s_0`` is prepended to the output.
+
+        Returns
+        -------
+        S (torch.Tensor) : ``[s_1, ..., s_T]`` of shape ``(B, T, R)`` (``(T, R)`` if ``X`` is 2D).
+            If ``include_initial=True``, ``[s_0, s_1, ..., s_T]`` of shape
+            ``(B, T+1, R)``.
+
+        Notes
+        -----
+        The conditioning vector for ``x_t`` is ``s_{t-1}``. With
+        ``include_initial=True``::
+
+            S = esn.get_states(X, include_initial=True)
+            cond = S[:, :-1]   # s_0, ..., s_{T-1}, aligned with x_1, ..., x_T
+        """
+        unbatched = X.ndim == 2
+        if unbatched:
+            X = X.unsqueeze(0)
+        X = X.to(device=self.A.device, dtype=self.A.dtype)
+        B, T, _ = X.shape
+
+        if s0 is None:
+            s = torch.zeros(B, self.reservoir_size, device=X.device, dtype=X.dtype)  
+        else:
+            s0.to(device=X.device, dtype=X.dtype)
+
+        states = [s] if include_initial else []
         for t in range(T):
-            s = self.leak_rate * s + (1 - self.leak_rate) * self.activ(self.A @ s + self.C @ X[t].reshape(-1,1) + self.zeta) #type: ignore
-            states.append(s) # [s_1, ..., s_T]
-        S = torch.stack(states)
-        self.S = S.squeeze(-1) # (T, reservoir_size)
-        return self.S
+            s = self.step(s, X[:, t])
+            states.append(s)
+        S = torch.stack(states, dim=1)
+        return S.squeeze(0) if unbatched else S
 
     @torch.no_grad()
-    def fit(self, X : torch.Tensor, y : torch.Tensor):
-        """ 
-        Fit the observation map
-        X : input time series (T,N)
-        y : output time series (T,M)
+    def update_states(self, 
+                      S: torch.Tensor, 
+                      x_next: torch.Tensor
+                      ) -> torch.Tensor:
         """
-        X = X[:-1] # use X = [x_1, ..., x{T-1}]
-        y = y[1:] # use y = [y_2, ..., y_T]
-        self.get_states(X=X) # generate the sequence of S
-        self.W_out = self.observation_map.fit(X=self.S,y=y) # (reservoir_size,M)
-        return self.W_out
+        Update an arbitrary long sequence of states. Useful in inference time 
 
-    
-    def forward(self, X : torch.Tensor):
-        S = self.get_states(X=X) # (T,reservoir_size,1)
-        y_hat = self.observation_map.predict(S) # should be (T,reservoir_size) * (reservoir_size,M)
-        return y_hat, S
-    
-    @torch.no_grad()
-    def update_states(self, X_t: torch.Tensor):
+        Parameters
+        ---------
+            S (torch.Tensor) : a tensor with ordered states of the ESN `[s_0, ..., s_t]` or `[s_{t-L}, ..., s_t]` for a int L 
+            x_next (torch.Tensor) the tensor with `x_{t+1}` of shape (B, N) for a batch B or (1,N)
+
+        Returns 
+        -------
+            s_next (torch.Tensor) :  The (B, t+2, R) = [s_0, ..., s_{t+1}]
         """
-        Update S = [s_0, s_1, ..., s_T]
-        
-
-        """
-        assert X_t.shape == (self.in_dim, 1), f"Expected shape {(self.in_dim, 1)}, got {X_t.shape}"
-
-        s_prev = self.S[-1].reshape(-1, 1)  # (reservoir_size, 1)
-
-        s_next = (self.leak_rate * s_prev + (1 - self.leak_rate) * self.activ(self.A @ s_prev + self.C @ X_t.reshape(-1, 1) + self.zeta))  # (reservoir_size, 1)
-
-        self.S = torch.cat([self.S, s_next.squeeze(-1).unsqueeze(0)], dim=0)
-        return self.S
-   
-
-
-
-
-
-class ObservationMap(ABC):
-
-    def __init__(self, in_dim : int, intercept: bool = False):
-        self.intercept = intercept
-        self.in_dim = in_dim    
-
-    def _intercept(self, X: torch.Tensor) -> torch.Tensor:
-        """Prepend a column of ones to X (same device & dtype as X)."""
-        bias = torch.ones(X.shape[0], 1, dtype=X.dtype, device=X.device)
-        return torch.cat([bias, X], dim=1)
-    
-    @abstractmethod
-    def fit(self, X : torch.Tensor, y : torch.Tensor):
-        pass 
-
-    @abstractmethod
-    def predict(self, X : torch.Tensor):
-        pass
-
-class OLS(ObservationMap):
-    """ 
-    OLS estimation of the output layer: 
-        W = (X'X)^-1 X'y
-    """
-    def __init__(self, in_dim : int, intercept: bool = False):
-        super().__init__(in_dim=in_dim, intercept=intercept)
-        self.W = None
-
-    @torch.no_grad()
-    def fit(self, X : torch.Tensor, y : torch.Tensor):
-        """
-        X : (T,N)
-        y : (T, M)
-        """
-        assert X.shape[0] == y.shape[0], "The number of time period must be equal for X and y"
-
-        if self.intercept:
-            X = self._intercept(X=X)
-
-        inv = torch.linalg.inv(X.T @ X)
-        self.W = inv @ X.T @ y # (N,M)
-        return self.W 
-
-    @torch.no_grad()
-    def predict(self, X : torch.Tensor):
-        if self.W is None:
-            raise RuntimeError("Call fit() before forward()")
-        if self.intercept:
-            X = self._intercept(X=X)
-        return torch.matmul(X,self.W)
-
-
-class Ridge(ObservationMap):
-    """
-    Ridge regression: y = X @ W + e: min_W  ||y - X @ W||^2_2 + alpha * ||W||^2_2
-    Implementation according to Ballarin et al. (2025)
-    Idea for the code from: https://gist.github.com/myazdani/3d8a00cf7c9793e9fead1c89c1398f12
-    """
-    def __init__(self, in_dim : int, alpha: float = 1.0, intercept: bool = False):
-        super().__init__(in_dim=in_dim, intercept=intercept)
-        assert alpha >= 0, "alpha must be non-negative"
-        self.alpha = alpha
-        self.W_ridge = None
-
-    @torch.no_grad()
-    def fit(self, X: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """
-        Fit the ridge estimator.
-        X : (T, N)
-        y : (T, M)
-        """
-        assert X.shape[-1] == self.in_dim, f"Mispecified number of X features: in_dim = {self.in_dim}, got {X.shape[-1]}"
-        assert X.shape[0] == y.shape[0], "X and y must have the same number of rows"
-
-        if self.intercept:
-            X = self._intercept(X)      
-
-        N = X.shape[1]
-        T = X.shape[0]
-
-        I = torch.eye(N, dtype=X.dtype, device=X.device)
-        if self.intercept:
-            I[0, 0] = 0.0  # don't regularize intercept
-           
-
-        # W = (X'X + alpha*(T-1)*I)^{-1} X'y
-        S = torch.linalg.inv((X.T @ X) + self.alpha*(T-1)*I)
-        self.W_ridge = S @ X.T @ y # Should be (N,M)
-
-        return self.W_ridge 
-
-    @torch.no_grad()
-    def predict(self, X: torch.Tensor):
-        """
-        Predict:  ŷ = X @ W_ridge
-        X : (T,N)
-        """
-        if self.W_ridge is None:
-            raise RuntimeError("Call fit() before forward()")
-
-        if self.intercept:
-            X = self._intercept(X)
-
-        return torch.matmul(X,self.W_ridge)
+        x_next = x_next.to(device=self.A.device, dtype=self.A.dtype)
+        s_next = self.step(S[:, -1], x_next)
+        return torch.cat([S, s_next.unsqueeze(1)], dim=1)

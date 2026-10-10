@@ -1,8 +1,8 @@
 import torch
 from typing import Tuple
 
-from src.rcdiff.models.random_params import RandomWeight, RandomParams
-
+from rcdiff.models.random_params.random_params import RandomParams
+from rcdiff.models.random_params.random_weight import RandomWeight
 
 class ParametersRWDN(RandomParams):
     """

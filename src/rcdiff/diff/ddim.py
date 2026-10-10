@@ -1,6 +1,6 @@
 import torch 
 import numpy as np 
-from typing import Tuple, List, Set, 
+from typing import Tuple, List, Set
 from rcdiff.diff.diffusion import Diffusion 
 from rcdiff.diff.scheduler import BaseScheduler
 

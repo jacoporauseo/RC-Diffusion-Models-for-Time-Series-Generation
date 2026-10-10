@@ -1,7 +1,8 @@
 
 import torch 
 import numpy as np
-from src.rcdiff.models.random_params import RandomWeight, RandomParams
+from rcdiff.models.random_params.random_weight import RandomWeight
+from rcdiff.models.random_params.random_params import RandomParams
 
 
 class ParametersESN(RandomParams):
