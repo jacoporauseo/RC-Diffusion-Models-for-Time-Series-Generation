@@ -14,3 +14,10 @@ class TimeSeriesModel(ABC):
     def generate_trajectory(self, T: int, batch_size: int = 1, burn_in: int = 500) -> torch.Tensor:
         """Returns a batch of trajectories, shape (batch_size, T, obs_dim)."""
         ...
+
+
+
+
+
+
+        

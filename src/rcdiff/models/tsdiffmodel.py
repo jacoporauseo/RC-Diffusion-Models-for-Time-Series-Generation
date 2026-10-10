@@ -1,14 +1,17 @@
 import lightning as pl
 import torch 
 import torch.nn as nn 
-from rcdiff.diff.diffusion import NoiseProcess 
+from rcdiff.diff.diffusion import Diffusion 
 import torch.nn.functional as F
+
+# simple CLaude example of lighning module 
+
 
 class DiffusionLitModule(pl.LightningModule):
     def __init__(self, 
                  encoder: nn.Module, 
                  denoiser: nn.Module, 
-                 diffuser : NoiseProcess
+                 diffuser : Diffusion
                  ):
         super().__init__()
         self.encoder = encoder      # registered submodule
