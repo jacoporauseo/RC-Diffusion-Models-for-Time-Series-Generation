@@ -115,3 +115,5 @@ class ESN(nn.Module):
         x_next = x_next.to(device=self.A.device, dtype=self.A.dtype)
         s_next = self.step(S[:, -1], x_next)
         return torch.cat([S, s_next.unsqueeze(1)], dim=1)
+
+
