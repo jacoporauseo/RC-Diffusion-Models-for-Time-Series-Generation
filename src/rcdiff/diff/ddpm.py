@@ -36,29 +36,34 @@ class DDPM(Diffusion):
         epsilon = torch.randn_like(x_0)
         alpha_bar_k = self.scheduler.get_alpha_bar(k, x_shape=x_0.shape)
         # alpha_bar_k = self.scheduler.alpha_bar[k].view(-1, 1) #type: ignore
-        print(alpha_bar_k.shape)
         x_t = torch.sqrt(alpha_bar_k) * x_0 + torch.sqrt(1 - alpha_bar_k) * epsilon
         return x_t, epsilon
 
     @torch.no_grad()
     def p_sample(self, model, x_k: torch.Tensor, k : int, s : torch.Tensor) -> torch.Tensor:
-        r"""
+        """
         Sample from the reverse  `p(x_t^{k-1} | x_t^{k}) ~ N(μ,σ^2)`. From DDPM of 
-        `Ho et al. (2020)`: \n
-                x_t^{k-1} | x_t^{k-1}, k, s_{t-1} ~ p_{θ}(x_t^{k-1} | x_t, s_{t-1}, k) 
+        `Ho et al. (2020)`:
+        
+            `x_t^{k-1} | x_t^{k-1}, k, s_{t-1} ~ p_{θ}(x_t^{k-1} | x_t, s_{t-1}, k)`
+
         where `s_{t-1}` is a compact representation of the history of time series `x_t` and 
         `k` is the diffusion step. The reverse distribution is modeled as Gaussian under the
-        assumption that the variance schedule `β_k` is small. The mean of the reverse distribution is: \n
-                μ = 1/sqrt(α_k) * [x_t^{k} - (1-α_k)/sqrt(1 - ᾱ_k) * ε(x_t^{k}, s_{t-1}, k)]
-        The variance is: \n
-                            σ^2 = (1-ᾱ_{k-1})/(1 - ᾱ_k) * β_k
+        assumption that the variance schedule `β_k` is small. The mean of the reverse distribution is: 
+        
+            `μ = 1/sqrt(α_k) * [x_t^{k} - (1-α_k)/sqrt(1 - ᾱ_k) * ε(x_t^{k}, s_{t-1}, k)]`
+
+        The variance is: 
+
+                            ``σ^2 = (1-ᾱ_{k-1})/(1 - ᾱ_k) * β_k``
+
         This for all `k` except the `k=1` case (in our code `k=0`) where the variance is zero. Another
         option in this case is to model the reverse process in `k=1` with an ad-hoc decoder. 
 
         Parameters
         ---------
             x_k (torch.Tensor)  : the vector x^k_t of the noised version at step k
-            s (torch.Tensor)    : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
+            s (torch.Tensor)    : the econded vector `s_{t-1} in mathcal{R}^S` of shape [S,1] or [S,]
             k (int)             : diffusion step k
             model (nn.Module)   : denoisers model (U-Net, MLP, RWDN, etc.)
 
@@ -67,7 +72,7 @@ class DDPM(Diffusion):
             x_prev (torch.Tensor) : the vector x^{k-1}_t of the noised version at step k-1
         """
         k_tensor = torch.tensor([k], device=x_k.device).expand(x_k.shape[0])
-        eps = model(x_k, k_tensor, y=s)
+        eps = model(x = x_k, k = k_tensor, s = s)
 
         # can use the getters instead but nothing changes since here just need scalars
         alpha_k     = self.scheduler.alpha[k] # type: ignore
@@ -75,7 +80,7 @@ class DDPM(Diffusion):
         beta_k      = self.scheduler.beta[k] # type: ignore
         beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
 
-        if k == 0: 
+        if k == 0: # not needed already corrected in BaseScheduler
             alpha_prev = 1
 
         mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
@@ -112,9 +117,8 @@ class DDPM(Diffusion):
             full_reverse (list) : list of the history of the reverse process for plotting 
                                   and debugging 
         """
-        N, _ = x.shape # (N,) of the target
-        final_shape = (n_samples, N)
-        x_k = torch.randn(size = final_shape)
+        N = x.shape[-1]                                  # was: N, _ = x.shape
+        x_k = torch.randn(n_samples, N, device=s.device)
         full_reverse = [x_k]
         for k in reversed(range(self.scheduler.K)):
             x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s)

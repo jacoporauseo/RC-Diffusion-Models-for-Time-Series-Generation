@@ -86,7 +86,7 @@ class ESN(nn.Module):
         if s0 is None:
             s = torch.zeros(B, self.reservoir_size, device=X.device, dtype=X.dtype)  
         else:
-            s0.to(device=X.device, dtype=X.dtype)
+            s = s0.to(device=X.device, dtype=X.dtype)
 
         states = [s] if include_initial else []
         for t in range(T):

@@ -37,6 +37,17 @@ class Diffusion(ABC):
         """
         pass 
 
+    @abstractmethod
+    def reverse_process(self,
+                        x : torch.Tensor,
+                        s : torch.Tensor,
+                        denoiser : torch.nn.Module, 
+                        n_samples : int,
+                        ) -> Tuple[torch.Tensor, list]:
+        pass 
+
+
+
 
 def extract(input, t: torch.Tensor, x: torch.Tensor):
     if t.ndim == 0:
