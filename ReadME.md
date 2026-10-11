@@ -13,7 +13,16 @@ $$ p(\bm{x}_t | \bm{x}_{t-1}, ..., \bm{x}_{t-L}, \bm{c}_{t-1}, ..., \bm{c}_{t-L}
 for some exogenous covariates $\bm{c}_{t}$. This is the framework of many time-series models. Check out GlutonTs (https://ts.gluon.ai/stable/). TimeGrad is a diffusion probabilistic model (https://github.com/zalandoresearch/pytorch-ts) that leverages Recurrent Neural Networks to generate a compact representation of the time dimention while it applies the DDPM framework of Ho et al. (2020) to sample from the conditional distribution. 
 
 
-# Reservoir Computing 
+# RC Time Series Models
 
-... 
+A typical time series diffusion model (as TimeGrad or Scoregrad) has three main components: 
+
+* A **diffusion process** (either VP or VE). We adopt DDPM forward and reverse process (Ho et al., 2020). However many representation of the forward and the reverse can be implemented, for example DDIM, SDEs or accelerated sampling versions. 
+
+* A **time encoding network**. Standard literature uses RNNs or Transformers. Here we present a version with a Echo State Network (ESN) 
+
+* A **denoising network**. Here a lot of work has been done and there are thousants of possible architectures. A U-Net, CNNs or Vision Transformers are the most common ones. Here we suggest to use a Random Weight Neural Network. 
+
+
+
 
