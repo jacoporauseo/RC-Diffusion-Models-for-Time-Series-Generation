@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Callable
 from rcdiff.models.random_params import ParametersESN
-
+from rcdiff.models.encoders.ols import Ridge, OLS
 
 class ESN(nn.Module):
     """
@@ -25,6 +25,7 @@ class ESN(nn.Module):
         self.in_dim = in_dim
         self.reservoir_size = reservoir_size
         self.leak_rate = params.leak_rate
+        self.ridge = Ridge(in_dim=reservoir_size,alpha=1, intercept=True)
 
         if activ == 'tanh':
             self.activ = torch.tanh
@@ -106,7 +107,7 @@ class ESN(nn.Module):
         Parameters
         ---------
             S (torch.Tensor) : a tensor with ordered states of the ESN `[s_0, ..., s_t]` or `[s_{t-L}, ..., s_t]` for a int L 
-            x_next (torch.Tensor) the tensor with `x_{t+1}` of shape (B, N) for a batch B or (1,N)
+            x_next (torch.Tensor) : the tensor with `x_{t+1}` of shape (B, N) for a batch B or (1,N)
 
         Returns 
         -------
@@ -117,3 +118,13 @@ class ESN(nn.Module):
         return torch.cat([S, s_next.unsqueeze(1)], dim=1)
 
 
+    def fit(self, x : torch.Tensor, y : torch.Tensor): 
+        s = self.get_states(X = x, include_initial=False) 
+        self.ridge.fit(X = s, y = y)
+
+    def predict(self, x : torch.Tensor): 
+        s = self.get_states(X = x, include_initial=False)
+        return self.ridge.predict(X = s)
+
+    def rolling_window_prediction(self,):
+        pass

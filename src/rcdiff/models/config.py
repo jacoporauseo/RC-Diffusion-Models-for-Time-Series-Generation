@@ -4,14 +4,14 @@ from dataclasses import dataclass, field, asdict, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Optional, get_type_hints
 
+
 import torch
 import yaml
 
-from rcdiff.models.random_params.random_weight import RandomWeight
-from rcdiff.models.random_params.esn_params import ParametersESN
-from rcdiff.models.encoders.esn import ESN
-from rcdiff.models.denoisers.simple_mlp import SimpleMLP
-# from rcdiff.models.denoisers.timegrad import TimeGradDenoiser
+from rcdiff.models.random_params import RandomWeight, ParametersESN
+from rcdiff.models.encoders import ESN
+from rcdiff.models.denoisers import SimpleMLP
+from rcdiff.diff import DDPM, BaseScheduler
 
 
 def _from_dict(cls, d: dict):
@@ -53,7 +53,14 @@ class DenoiserConfig:
 
 @dataclass
 class DiffusionConfig:
-    num_timesteps: int = 100 
+    num_timesteps: int = 100
+    beta_1: float = 1e-4
+    beta_K: float = 0.1
+    mode: str = "linear"
+    s: float = 0.008
+
+
+
 
 
 @dataclass
@@ -79,6 +86,7 @@ class ExperimentConfig:
     denoiser: DenoiserConfig = field(default_factory=DenoiserConfig)
     diffusion: DiffusionConfig = field(default_factory=DiffusionConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    n_covariates: int = 0   # M; the ESN input is [x, c], size in_dim + M
 
     def __post_init__(self):
         assert 0.0 <= self.train.val_fraction < 1.0
@@ -96,13 +104,18 @@ class ExperimentConfig:
 DENOISERS = {"simple_mlp": SimpleMLP}       
 
 
-def build_esn(cfg: ExperimentConfig) -> ESN:
+def build_esn(cfg):
     e = cfg.esn
-    params = ParametersESN(
-        A_RW=RandomWeight(**asdict(e.A)), C_RW=RandomWeight(**asdict(e.C)),
-        zeta_RW=RandomWeight(**asdict(e.zeta)),
-        leak_rate=e.leak_rate, rho=e.rho, gamma=e.gamma, omega=e.omega, seed=e.seed)
-    return ESN(in_dim=cfg.in_dim, reservoir_size=e.reservoir_size, params=params, activ=e.activ)
+    params = ParametersESN(A_RW=RandomWeight(**asdict(e.A)), C_RW=RandomWeight(**asdict(e.C)),
+                           zeta_RW=RandomWeight(**asdict(e.zeta)), leak_rate=e.leak_rate,
+                           rho=e.rho, gamma=e.gamma, omega=e.omega, seed=e.seed)
+    return ESN(in_dim=cfg.in_dim + cfg.n_covariates, reservoir_size=e.reservoir_size,
+               params=params, activ=e.activ)
+
+def build_diffusion(cfg):
+    d = cfg.diffusion
+    return DDPM(scheduler=BaseScheduler(K=d.num_timesteps, beta_1=d.beta_1,
+                                        beta_K=d.beta_K, s=d.s, mode=d.mode))
 
 
 def build_denoiser(cfg: ExperimentConfig) -> torch.nn.Module:

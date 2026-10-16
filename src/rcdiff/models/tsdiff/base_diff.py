@@ -6,7 +6,7 @@ from rcdiff.models.encoders import ESN
 from rcdiff.diff import Diffusion
 
 
-class RCDiff(ABC): 
+class TSDiffusionModel(ABC): 
 
     def __init__(self, 
                  diff : Diffusion, 

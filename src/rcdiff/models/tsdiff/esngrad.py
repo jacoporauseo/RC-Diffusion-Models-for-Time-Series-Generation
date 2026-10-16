@@ -5,14 +5,16 @@ import time
 from tqdm import tqdm 
 import copy 
 import math 
+from dataclasses import asdict, replace
+from pathlib import Path
 
 from rcdiff.models.encoders import ESN
 from rcdiff.diff import Diffusion
 from rcdiff.models.config import TrainConfig
-from rcdiff.models.tsdiff.base_diff import RCDiff
+from rcdiff.models.tsdiff.base_diff import TSDiffusionModel
 
 
-class ESNGrad(RCDiff): 
+class ESNGrad(TSDiffusionModel): 
 
     def __init__(self, 
                  diff : Diffusion, 
@@ -22,6 +24,8 @@ class ESNGrad(RCDiff):
                  ): 
         super().__init__(diff=diff, esn=esn, denoiser=denoiser) 
         self.spec = spec 
+        self.transform = {}
+        self.history = None
 
 
     def fit(self, 
@@ -103,8 +107,10 @@ class ESNGrad(RCDiff):
                     tqdm.write(f"Early stopping at iteration {it} | best val loss {best_val:.4f}")
                     break
 
-        self.denoiser.load_state_dict(best_state)
+        if best_state is not None:     
+            self.denoiser.load_state_dict(best_state)
         self.denoiser.eval()
+        self.history = history
         return history, time.time() - start
 
     @torch.no_grad()
@@ -139,9 +145,7 @@ class ESNGrad(RCDiff):
         # Take s_T and expand to (n_samples, R)
         s = self.esn.get_states(X=c)[-1]            
         s = s.unsqueeze(0).expand(n_samples, -1)   
-        
         x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, denoiser=self.denoiser, n_samples=n_samples)
-
         return x_hat, full_reverse
 
     @torch.no_grad()
@@ -152,11 +156,9 @@ class ESNGrad(RCDiff):
         Returns
         -------
             forecast (torch.Tensor) : (T_test, N, n_samples)
-
         """
 
         _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
-
         x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
         _, cond_test = self._build_conditioning_set(x_test, c_test)
 
@@ -174,8 +176,46 @@ class ESNGrad(RCDiff):
 
         return torch.stack(forecast)
 
+    # CLAUDE FUNCTIONS... to be validated
+    def save_checkpoint(self, path, cfg, history=None, extra=None):
+        """Save weights + config + data transforms to `path` (.pth) and a readable .yaml copy."""
+        assert cfg.esn.reservoir_size == self.esn.reservoir_size, "cfg and ESN disagree"
+        assert cfg.diffusion.num_timesteps == self.diff.scheduler.K, "cfg and scheduler disagree"
+        cfg = replace(cfg, train=self.spec)                    # store the training hparams actually used
+        path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+        cpu = lambda sd: {k: v.detach().cpu() for k, v in sd.items()}
+        torch.save({
+            "format_version": 1,
+            "config": asdict(cfg),
+            "denoiser": cpu(self.denoiser.state_dict()),
+            "esn": cpu(self.esn.state_dict()),
+            "transform": self.transform,                       # plain floats / tensors only
+            "history": history if history is not None else self.history,
+            "extra": extra or {},
+            "torch_version": str(torch.__version__),
+        }, path)
+        cfg.to_yaml(path.with_suffix(".yaml"))
 
+    @classmethod
+    def load_checkpoint(cls, path, map_location="cpu"):
+        from rcdiff.models.config import (ExperimentConfig, _from_dict,
+                                        build_esn, build_denoiser, build_diffusion)
+        ck = torch.load(path, map_location=map_location, weights_only=True)
+        cfg = _from_dict(ExperimentConfig, ck["config"])
 
+        esn = build_esn(cfg)
+        regenerated = {k: v.clone() for k, v in esn.state_dict().items()}
+        esn.load_state_dict(ck["esn"])
+        if not all(torch.allclose(regenerated[k], ck["esn"][k]) for k in regenerated):
+            print("Warning: ESN weights regenerated from the seed differ from the saved ones "
+                "(different torch version?). Using the saved ones.")
+
+        denoiser = build_denoiser(cfg)
+        denoiser.load_state_dict(ck["denoiser"]); denoiser.eval()
+
+        model = cls(diff=build_diffusion(cfg), esn=esn, denoiser=denoiser, spec=cfg.train)
+        model.transform, model.history = ck["transform"], ck["history"]
+        return model, cfg
 
 
 
