@@ -10,3 +10,4 @@ old/**/*
 *.egg-info/
 *rcdiff.egg-info/* 
 src/rcdiff.egg-info
+runs/* 

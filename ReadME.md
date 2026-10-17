@@ -21,7 +21,7 @@ A typical time series diffusion model (as TimeGrad or Scoregrad) has three main 
 
 * A **time encoding network**. Standard literature uses RNNs or Transformers. Here we present a version with a Echo State Network (ESN) 
 
-* A **denoising network**. Here a lot of work has been done and there are thousants of possible architectures. A U-Net, CNNs or Vision Transformers are the most common ones. Here we suggest to use a Random Weight Neural Network. 
+* A **denoising network**. Much work has been done and there are thousants of possible architectures. A U-Net, CNNs or Vision Transformers are the most common ones. Here we suggest to use a Random Weight Neural Network. 
 
 
 
