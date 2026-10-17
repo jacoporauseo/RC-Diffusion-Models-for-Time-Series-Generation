@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import time 
 from tqdm import tqdm 
 import pandas as pd 
+import numpy as np 
 
 from rcdiff.models.encoders import ESN
 from rcdiff.diff import Diffusion
@@ -45,28 +46,30 @@ class RCDiff(TSDiffusionModel):
         losses_before = []
         losses_after  = []
 
-        start = time.time()
+        start = time.time() 
 
-        for k in tqdm(range(self.diff.scheduler.K)):
+        ks = list(range(self.diff.scheduler.K))[::-1]
+        print(len(ks))
+        for k in tqdm(ks):
 
             k_tensor = torch.full((T-self.spec.t0,), fill_value = k, dtype=torch.long, device=x.device)
             x_k, epsilon = self.diff.q_sample(x_0 = x, k = k_tensor) 
     
-            eps_hat = self.denoiser(x_k = x_k, s = s, k = k_tensor)                    
+            eps_hat = self.denoiser(x = x_k, s = s, k = k)                    
             loss_bt = F.mse_loss(eps_hat, epsilon)
             losses_before.append(loss_bt.item())
 
-
             self.denoiser.fit(x_k = x_k, s = s, epsilon_k = epsilon, k = k, method = "Ridge")
-            eps_hat = self.denoiser(x_k = x_k, s = s, k = k_tensor)  
+            eps_hat = self.denoiser(x = x_k, s = s, k = k)  
             loss_at  = F.mse_loss(eps_hat, epsilon)
             losses_after.append(loss_at.item())
     
         elapsed = time.time() - start
         print(f"\nTraining complete Time: {elapsed:.2f}s")
 
-        df_losses = pd.DataFrame({'LossBefore' : losses_before, 'LossAfter' : losses_after},
-                                 index = range(self.diff.scheduler.K))
+        print(len(losses_before))
+        df_losses = pd.DataFrame({'LossBefore' : losses_before, 'LossAfter' : losses_after,
+                                  'k' : ks},)
 
         return df_losses, elapsed
 
@@ -91,7 +94,40 @@ class RCDiff(TSDiffusionModel):
         -------
             x_hat (torch.Tensor) : samples from the reverse process of shape `(n_samples, N)`
         """
-        pass
+        x, c = self._build_conditioning_set(x = x, c = c)
+        s = self.esn.get_states(X=c)[-1]            
+        s = s.unsqueeze(0).expand(n_samples, -1)   
+        x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, denoiser=self.denoiser, n_samples=n_samples)
+        return x_hat, full_reverse
+
+    
+    @torch.no_grad()
+    def one_step_ahead_forecast(self, x_train, x_test, c_train = None, c_test = None, n_samples : int = 100):
+        """ 
+        Perform a recursive one-step ahead probabilistic forecast. 
+
+        Returns
+        -------
+            forecast (torch.Tensor) : (T_test, N, n_samples)
+        """
+
+        _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
+        x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
+        _, cond_test = self._build_conditioning_set(x_test, c_test)
+
+        S = self.esn.get_states(X=cond_train.unsqueeze(0))  # (1, T_train, R)
+
+        forecast = []
+        for t in tqdm(range(T_test)):
+            s = S[:, -1].expand(n_samples, -1) # take last t (n_samples, R)
+            x_hat, _ = self.diff.reverse_process(x = x_train, 
+                                                 s = s, 
+                                                 denoiser = self.denoiser, 
+                                                 n_samples = n_samples)
+            forecast.append(x_hat)                                             # (n_samples, N)
+            S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   # absorb realized x_{T+t+1}
+
+        return torch.stack(forecast)
 
 
 

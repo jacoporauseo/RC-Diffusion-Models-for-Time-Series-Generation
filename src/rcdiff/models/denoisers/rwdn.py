@@ -49,8 +49,8 @@ class RWDenoisingNetwork(nn.Module):
                              in_size=in_dim + reservoir_size, device=device)
         self.register_buffer("A", A)                       # (K, H, N+S)
         self.register_buffer("b", b.squeeze(-1))           # (K, H)
-        self.register_buffer("W", torch.zeros(K, hidden_size, in_dim,
-                                              device=A.device, dtype=A.dtype))
+        W = torch.zeros(K, hidden_size, in_dim, device=A.device, dtype=A.dtype)
+        self.register_buffer("W", W)
         self.set_activation(activ)
 
     def set_activation(self, activ: str) -> None:
@@ -58,16 +58,45 @@ class RWDenoisingNetwork(nn.Module):
             raise ValueError(f"Available activations: {self.activations}, got {activ}")
         self.sigma = self.nn_activ[activ]()
 
-    def _features(self, x_k, s, k):
+    def _features(self, x_k, s, k: int):
+        k = self._to_int_step(k)
+        if not isinstance(k, int):
+            raise TypeError(f"k must be an int, got {type(k)}")
+        if x_k.shape[0] != s.shape[0]:
+            raise ValueError(f"x_k and s have different rows: {x_k.shape} vs {s.shape}")
         u = torch.cat([x_k, s], dim=1) # (T, N+S)
-        return self.sigma(u @ self.A[k].T + self.b[k]) # (T, H)
+        return self.sigma(u @ self.A[k].transpose(-1, -2) + self.b[k]) # (T, H)
+
+    def _to_int_step(self, k: int | torch.Tensor) -> int:
+        """
+        Convert a diffusion step to a int.
+
+        Parameters
+        ----------
+            k (int | torch.Tensor) : step index, or a tensor whose entries are all equal.
+
+        Returns
+        -------
+            k (int) : the diffusion step.
+        """
+        if isinstance(k, int):
+            k_int = k
+        else:
+            k = torch.as_tensor(k)
+            if k.numel() == 0 or not bool((k == k.flatten()[0]).all()):
+                raise ValueError("RWDenoisingNetwork needs the same step k for all rows; "
+                                "a different k per row is not supported.")
+            k_int = int(k.flatten()[0])
+        if not 0 <= k_int < self.K:
+            raise ValueError(f"k must be in [0, {self.K - 1}], got {k_int}")
+        return k_int
 
     @torch.no_grad()
     def fit(self, 
             x_k: torch.Tensor, 
             s: torch.Tensor, 
             epsilon_k: torch.Tensor,
-            k: int | torch.Tensor, 
+            k: int, 
             method: str = "Ridge"
             ) -> None:
         """
@@ -93,7 +122,7 @@ class RWDenoisingNetwork(nn.Module):
             self.W[k] = torch.linalg.solve(Z.T @ Z + self.lam * I, Z.T @ epsilon_k)
 
     @torch.no_grad()
-    def forward(self, x_k: torch.Tensor, s: torch.Tensor, k: int) -> torch.Tensor:
+    def forward(self, x : torch.Tensor, s: torch.Tensor, k: int) -> torch.Tensor:
         r"""
         Predict `\epsilon` from `x_t^k`.
 
@@ -107,6 +136,5 @@ class RWDenoisingNetwork(nn.Module):
         -------
             epsilon_hat (torch.Tensor) : predicted noise, shape (T, N).
         """
-        if s.shape[0] == 1 and x_k.shape[0] > 1:
-            s = s.expand(x_k.shape[0], -1)
-        return self._features(x_k, s, k) @ self.W[k]
+        k = self._to_int_step(k)
+        return self._features(x, s, k) @ self.W[k]
