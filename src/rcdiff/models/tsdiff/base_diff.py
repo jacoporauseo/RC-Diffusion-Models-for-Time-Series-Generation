@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn 
 from abc import ABC, abstractmethod
+from typing import Any 
 
 from rcdiff.models.encoders import ESN
 from rcdiff.diff import Diffusion

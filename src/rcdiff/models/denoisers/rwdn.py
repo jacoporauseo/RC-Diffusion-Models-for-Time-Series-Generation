@@ -67,7 +67,7 @@ class RWDenoisingNetwork(nn.Module):
             x_k: torch.Tensor, 
             s: torch.Tensor, 
             epsilon_k: torch.Tensor,
-            k: int, 
+            k: int | torch.Tensor, 
             method: str = "Ridge"
             ) -> None:
         """

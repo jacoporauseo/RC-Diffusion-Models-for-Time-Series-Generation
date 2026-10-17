@@ -4,7 +4,7 @@ from rcdiff.models.random_params import (
                            ParametersRWDN, 
                            ParametersESN,
                            )
-from rcdiff.models import ESNGrad 
-from rcdiff.models import SimpleMLP, ESN
+from rcdiff.models import ESNGrad, RCDiff 
+from rcdiff.models import SimpleMLP, ESN, RWDenoisingNetwork
 from rcdiff.models import TrainConfig
-
+from rcdiff.models.config import ExperimentConfig, build_diffusion, build_denoiser 
