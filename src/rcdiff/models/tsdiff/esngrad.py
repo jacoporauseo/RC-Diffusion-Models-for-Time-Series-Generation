@@ -7,6 +7,7 @@ import copy
 import math 
 from dataclasses import asdict, replace
 from pathlib import Path
+import pandas as pd 
 
 from rcdiff.models.encoders import ESN
 from rcdiff.diff import Diffusion
@@ -111,7 +112,7 @@ class ESNGrad(TSDiffusionModel):
             self.denoiser.load_state_dict(best_state)
         self.denoiser.eval()
         self.history = history
-        return history, time.time() - start
+        return pd.DataFrame(history), time.time() - start
 
     @torch.no_grad()
     def _evaluate(self, x_noisy, k, s, eps) -> float:
