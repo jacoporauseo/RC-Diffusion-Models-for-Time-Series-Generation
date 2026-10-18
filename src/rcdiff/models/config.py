@@ -11,7 +11,7 @@ import yaml
 from rcdiff.models.random_params import RandomWeight, ParametersESN
 from rcdiff.models.encoders import ESN
 from rcdiff.models.denoisers import SimpleMLP
-from rcdiff.diff import DDPM, BaseScheduler
+from rcdiff.diff import DDPM, BaseScheduler, DDIM, Diffusion
 
 
 def _from_dict(cls, d: dict):
@@ -58,6 +58,10 @@ class DiffusionConfig:
     beta_K: float = 0.1
     mode: str = "linear"
     s: float = 0.008
+    process: str = 'ddpm'
+
+    def __post_init__(self,): 
+        assert self.process in ['ddpm', 'ddim'] # to add for other processes
 
 
 
@@ -112,10 +116,16 @@ def build_esn(cfg):
     return ESN(in_dim=cfg.in_dim + cfg.n_covariates, reservoir_size=e.reservoir_size,
                params=params, activ=e.activ)
 
-def build_diffusion(cfg):
+def build_diffusion(cfg) -> Diffusion:
     d = cfg.diffusion
-    return DDPM(scheduler=BaseScheduler(K=d.num_timesteps, beta_1=d.beta_1,
+    if d.process == 'ddpm':
+        return DDPM(scheduler=BaseScheduler(K=d.num_timesteps, beta_1=d.beta_1,
                                         beta_K=d.beta_K, s=d.s, mode=d.mode))
+    elif d.process == 'ddim': 
+        return DDIM(scheduler=BaseScheduler(K=d.num_timesteps, beta_1=d.beta_1,
+                                        beta_K=d.beta_K, s=d.s, mode=d.mode))
+    else: 
+        raise NotImplementedError('Select a valid diffusion process')
 
 
 def build_denoiser(cfg: ExperimentConfig) -> torch.nn.Module:
