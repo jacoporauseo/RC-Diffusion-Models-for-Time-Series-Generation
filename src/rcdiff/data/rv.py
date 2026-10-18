@@ -35,8 +35,8 @@ class RVSP500:
         return (dates_train, RV_train), (dates_test, RV_test)
 
     def get_taining_set_mean_and_std(self, RV_train): 
-        mu =  RV_train.mean(dim = 1)
-        sigma = RV_train.std(dim = 1)
+        mu =  RV_train.mean(dim = 0)
+        sigma = RV_train.std(dim = 0)
         return mu, sigma
 
     def standardize(self, x_train : torch.Tensor, x_test : torch.Tensor): 

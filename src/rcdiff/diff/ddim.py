@@ -85,3 +85,6 @@ class DDIM(Diffusion):
 
         x_prev = torch.sqrt(alpha_bar_k_prev) * predicted_x_0 + direction_to_x_t + random_noise
         return x_prev
+
+    def reverse_process(self,): 
+        return None 
