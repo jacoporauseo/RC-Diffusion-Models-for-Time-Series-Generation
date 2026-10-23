@@ -5,7 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rcdiff"
 version = "0.1.0"
-dependencies = []
+requires-python = ">=3.13"          # relax this if your code does not need 3.13 features
+dependencies = [
+    "torch>=2.13",
+    "numpy",
+    "scipy",
+    "pandas",
+    "scikit-learn",
+    "statsmodels",
+    "matplotlib",
+    "seaborn",
+    "tqdm",
+    "lightning>=2.6",
+    # add only if imported directly: numba, torchmetrics, joblib, PyYAML, openpyxl, formulaic
+]
+
+[project.optional-dependencies]
+notebook = ["ipykernel", "jupyterlab"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

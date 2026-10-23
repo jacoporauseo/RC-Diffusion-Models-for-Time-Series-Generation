@@ -11,3 +11,4 @@ old/**/*
 *rcdiff.egg-info/* 
 src/rcdiff.egg-info
 runs/* 
+figures/*

@@ -201,7 +201,7 @@ class ESNGrad(TSDiffusionModel):
     def load_checkpoint(cls, path, map_location="cpu"):
         from rcdiff.models.config import (ExperimentConfig, _from_dict,
                                         build_esn, build_denoiser, build_diffusion)
-        ck = torch.load(path, map_location=map_location, weights_only=True)
+        ck = torch.load(path, map_location=map_location)
         cfg = _from_dict(ExperimentConfig, ck["config"])
 
         esn = build_esn(cfg)
