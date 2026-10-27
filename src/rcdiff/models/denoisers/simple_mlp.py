@@ -5,13 +5,6 @@ import math
 from typing import List
 
 
-import math
-import torch
-import torch.nn as nn
-
-# TimeEmbedding is unchanged from your file
-
-
 class SimpleMLP(nn.Module):
     """
     MLP denoiser eps_theta(x, k, s) with FiLM conditioning on the diffusion step.

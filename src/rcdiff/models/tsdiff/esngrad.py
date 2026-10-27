@@ -116,6 +116,9 @@ class ESNGrad(TSDiffusionModel):
 
     @torch.no_grad()
     def _evaluate(self, x_noisy, k, s, eps) -> float:
+        """ 
+        can be added to the base class
+        """
         self.denoiser.eval()
         return F.mse_loss(self.denoiser(x_noisy, k=k, s=s), eps).item()
 
@@ -149,35 +152,128 @@ class ESNGrad(TSDiffusionModel):
         x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, denoiser=self.denoiser, n_samples=n_samples)
         return x_hat, full_reverse
 
+    ## OLD version: actually no need to do it in a sequential loop...
+    ## the ESN recursion already ensure that time is respected
+    # @torch.no_grad()
+    # def one_step_ahead_forecast(self, x_train, x_test, c_train = None, c_test = None, n_samples : int = 100):
+    #     """ 
+    #     Perform a recursive one-step ahead probabilistic forecast. 
+
+    #     Returns
+    #     -------
+    #         forecast (torch.Tensor) : (T_test, N, n_samples)
+    #     """
+
+    #     _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
+    #     x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
+    #     _, cond_test = self._build_conditioning_set(x_test, c_test)
+
+    #     S = self.esn.get_states(X=cond_train.unsqueeze(0))  # (1, T_train, R)
+
+    #     forecast = []
+    #     for t in tqdm(range(T_test)):
+    #         s = S[:, -1].expand(n_samples, -1) # take last t (n_samples, R)
+    #         x_hat, _ = self.diff.reverse_process(x = x_train, 
+    #                                              s = s, 
+    #                                              denoiser = self.denoiser, 
+    #                                              n_samples = n_samples)
+    #         forecast.append(x_hat)                                             # (n_samples, N)
+    #         S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   # absorb realized x_{T+t+1}
+
+    #     return torch.stack(forecast)
+
+
     @torch.no_grad()
-    def one_step_ahead_forecast(self, x_train, x_test, c_train = None, c_test = None, n_samples : int = 100):
+    def one_step_ahead_forecast(self, 
+                                x_train, x_test, 
+                                c_train = None, c_test = None,
+                                n_samples: int = 100, 
+                                chunk_size: int | None = None):
         """ 
         Perform a recursive one-step ahead probabilistic forecast. 
 
         Returns
         -------
-            forecast (torch.Tensor) : (T_test, N, n_samples)
+            forecast (torch.Tensor) : (T_test, n_samples, N)
+ 
         """
-
         _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
-        x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
+        x_train, cond_train = self._build_conditioning_set(x_train, c_train)
         _, cond_test = self._build_conditioning_set(x_test, c_test)
+        N = x_train.shape[-1]
 
-        S = self.esn.get_states(X=cond_train.unsqueeze(0))  # (1, T_train, R)
+        # ESN Recursion (time consistent by def): [s_T ... s_{T+T_test-1}]
+        s_T = self.esn.get_states(X=cond_train)[-1]
+        S = self.esn.get_states(X=cond_test, s0=s_T.unsqueeze(0), include_initial=True)                # (T_test+1, R) = [s_T, ..., s_{T+T_test}]
+        S = S[:T_test]                                       
+
+        out = []
+        chunk = chunk_size if chunk_size is not None else T_test
+        for i in tqdm(range(0, T_test, chunk)):
+            s = S[i:i + chunk].repeat_interleave(n_samples, dim=0)   # (chunk*n_samples, R)
+            x_hat, _ = self.diff.reverse_process(x=x_train, 
+                                                 s=s, 
+                                                 denoiser=self.denoiser, 
+                                                 n_samples=s.shape[0]
+                                                 )
+            out.append(x_hat.view(-1, n_samples, N)) # (chuck, n_samples, N)
+
+        forecast = torch.cat(out) # (T_test, n_samples, N) 
+        return forecast                                 
+    
+
+    @torch.no_grad()
+    def in_sample_check(self,
+                        x_train: torch.Tensor,
+                        c_train: torch.Tensor | None = None,
+                        n_samples: int = 50,
+                        chunk_size: int | None = None):
+        """
+        Vectorized in-sample check, processed in chunks of time points. It uses t0 from the specs
+
+        Parameters
+        ----------
+            x_train (torch.Tensor) : target series of shape (T_train, N)
+            c_train (torch.Tensor | None) : exogenous covariates of shape (T_train, M)
+            n_samples (int) : number of samples drawn per time point
+            chunk_size (int | None) : number of time points per reverse pass, so each pass
+                runs on `chunk_size * n_samples` rows. None = all time points at once.
+
+        Returns
+        -------
+            forecast (torch.Tensor) : shape (T_train - t0, n_samples, N), aligned with x_train[t0:].
+                Row j is drawn from p(x_{t0+j+1} | s_{t0+j}), the same pairing as in `fit`.
+        """
+        self.denoiser.eval()
+        x_train, cond_train = self._build_conditioning_set(x_train, c_train)
+        T_train, N = x_train.shape
+        t0 = self.spec.t0
+        assert 0 <= t0 < T_train
+
+        # [s_{t0}, ..., s_{T-1}], same slice as in `fit`: (T - t0, R)
+        s = self.esn.get_states(X=cond_train, include_initial=True)[t0:T_train]
+
+        L = s.shape[0]
+        chunk = chunk_size or L
+        assert chunk > 0
 
         forecast = []
-        for t in tqdm(range(T_test)):
-            s = S[:, -1].expand(n_samples, -1) # take last t (n_samples, R)
-            x_hat, _ = self.diff.reverse_process(x = x_train, 
-                                                 s = s, 
-                                                 denoiser = self.denoiser, 
-                                                 n_samples = n_samples)
-            forecast.append(x_hat)                                             # (n_samples, N)
-            S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   # absorb realized x_{T+t+1}
+        for i in tqdm(range(0, L, chunk), desc="In-sample check"):
+            s_chunk = s[i:i + chunk].repeat_interleave(n_samples, dim=0)   # (c * n_samples, R)
+            x_hat, _ = self.diff.reverse_process(x=x_train,                # x is only used for its shape[-1] = N
+                                                s=s_chunk,
+                                                denoiser=self.denoiser,
+                                                n_samples=s_chunk.shape[0])
+            forecast.append(x_hat.view(-1, n_samples, N))                  # (c, n_samples, N)
 
-        return torch.stack(forecast)
+        return torch.cat(forecast)                                          # (T - t0, n_samples, N)
 
-    # CLAUDE FUNCTIONS... to be validated
+
+
+
+
+
+    # CLAUDE FUNCTIONS... to be validated and not working... 
     def save_checkpoint(self, path, cfg, history=None, extra=None):
         """Save weights + config + data transforms to `path` (.pth) and a readable .yaml copy."""
         assert cfg.esn.reservoir_size == self.esn.reservoir_size, "cfg and ESN disagree"

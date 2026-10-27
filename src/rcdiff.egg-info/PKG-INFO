@@ -1,5 +1,19 @@
 Metadata-Version: 2.4
 Name: rcdiff
 Version: 0.1.0
+Requires-Python: >=3.13
 License-File: LICENSE
+Requires-Dist: torch>=2.13
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: pandas
+Requires-Dist: scikit-learn
+Requires-Dist: statsmodels
+Requires-Dist: matplotlib
+Requires-Dist: seaborn
+Requires-Dist: tqdm
+Requires-Dist: lightning>=2.6
+Provides-Extra: notebook
+Requires-Dist: ipykernel; extra == "notebook"
+Requires-Dist: jupyterlab; extra == "notebook"
 Dynamic: license-file

@@ -21,7 +21,7 @@ class TSDiffusionModel(ABC):
     def _build_conditioning_set(self, 
                                 x : torch.Tensor, 
                                 c : torch.Tensor | None ,
-                                ): 
+                                ) -> tuple[torch.Tensor,torch.Tensor]: 
         x = x.float() 
         if c is not None: 
             c = c.float()

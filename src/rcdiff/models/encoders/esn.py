@@ -48,7 +48,7 @@ class ESN(nn.Module):
         return s_t_plus_1
 
     @torch.no_grad()
-    def get_states(self, X, s0=None, include_initial=False):
+    def get_states(self, X, s0=None, include_initial=False) -> torch.Tensor:
         """
         Compute the ESN states for a given input series.
 

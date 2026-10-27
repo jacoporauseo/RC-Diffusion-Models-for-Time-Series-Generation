@@ -40,7 +40,12 @@ class DDPM(Diffusion):
         return x_t, epsilon
 
     @torch.no_grad()
-    def p_sample(self, model, x_k: torch.Tensor, k : int, s : torch.Tensor) -> torch.Tensor:
+    def p_sample(self, 
+                 model, 
+                 x_k: torch.Tensor, 
+                 k : int, 
+                 s : torch.Tensor,
+                 reverse_variance : str = 'beta_tilde') -> torch.Tensor:
         """
         Sample from the reverse  `p(x_t^{k-1} | x_t^{k}) ~ N(μ,σ^2)`. From DDPM of 
         `Ho et al. (2020)`:
@@ -80,14 +85,14 @@ class DDPM(Diffusion):
         beta_k      = self.scheduler.beta[k] # type: ignore
         beta_tilde_k = self.scheduler.beta_tilde[k] # type: ignore
 
-        if k == 0: # not needed already corrected in BaseScheduler
-            alpha_prev = 1
-
         mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
         if k > 0:
             z = torch.randn_like(x_k)
-            sigma_k = torch.sqrt(beta_tilde_k)
+            if reverse_variance == 'beta':
+                sigma_k = torch.sqrt(beta_k) 
+            else: 
+                sigma_k = torch.sqrt(beta_tilde_k) 
             x_prev = mu + sigma_k * z
         else:
             x_prev = mu 
@@ -100,13 +105,14 @@ class DDPM(Diffusion):
                         s : torch.Tensor,
                         denoiser : torch.nn.Module, 
                         n_samples : int,
+                        reverse_variance : str = 'beta_tilde'
                         ) -> Tuple[torch.Tensor, list]:
         r""" 
         Full Reverse Process of DDPM. Sample from p(x_t|s_{t-1}). 
 
         Parameters
         ---------
-            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N of shape (N,) or (N,1)
+            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N of shape (N,1)
             s (torch.Tensor)     : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
             n_samples (int)      : the number of obs to sample
             denoiser (nn.Module) : denoisers model (U-Net, MLP, RWDN, etc.)
@@ -121,7 +127,7 @@ class DDPM(Diffusion):
         x_k = torch.randn(n_samples, N, device=s.device)
         full_reverse = [x_k]
         for k in reversed(range(self.scheduler.K)):
-            x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s)
+            x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s, reverse_variance=reverse_variance)
             full_reverse.append(x_k)
         return x_k, full_reverse
 
