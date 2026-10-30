@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rcdiff"
 version = "0.1.0"
-requires-python = ">=3.13"          # relax this if your code does not need 3.13 features
+requires-python = ">=3.13" 
 dependencies = [
     "torch>=2.13",
     "numpy",
