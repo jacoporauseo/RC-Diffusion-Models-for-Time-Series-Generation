@@ -11,10 +11,15 @@ class DDPM(Diffusion):
     DDPM Diffusion Process. From original paper of  `Ho et al. (2020)`.
     """
 
-    def __init__(self, scheduler : BaseScheduler):
-        super().__init__(scheduler=scheduler)
+    def __init__(self, 
+                 scheduler : BaseScheduler,
+                 seed:int = 12345):
+        super().__init__(scheduler=scheduler, seed = seed)
 
-    def q_sample(self, x_0 : torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def q_sample(self, 
+                 x_0 : torch.Tensor, 
+                 k: torch.Tensor,
+                 generator: torch.Generator | None = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample from `q(x_t^{k}|x_t)`. From DDPM of `Ho et al. (2020)`: \n
                                 x_t^k ~ q(x_t^k | x_t)
@@ -32,10 +37,12 @@ class DDPM(Diffusion):
             x_k (torch.Tensor) : noisy version `x_t^k` in DDPM.
             epsilon (torch.Tensor) : noise added to the original sample
         """
-            
-        epsilon = torch.randn_like(x_0)
+        
+        epsilon = torch.randn_like(x_0.shape, 
+                                   generator=generator,
+                                   device=x_0.device, 
+                                   dtype=x_0.dtype)
         alpha_bar_k = self.scheduler.get_alpha_bar(k, x_shape=x_0.shape)
-        # alpha_bar_k = self.scheduler.alpha_bar[k].view(-1, 1) #type: ignore
         x_t = torch.sqrt(alpha_bar_k) * x_0 + torch.sqrt(1 - alpha_bar_k) * epsilon
         return x_t, epsilon
 
@@ -45,6 +52,7 @@ class DDPM(Diffusion):
                  x_k: torch.Tensor, 
                  k : int, 
                  s : torch.Tensor,
+                 generator: torch.Generator | None = None,
                  reverse_variance : str = 'beta_tilde') -> torch.Tensor:
         """
         Sample from the reverse  `p(x_t^{k-1} | x_t^{k}) ~ N(μ,σ^2)`. From DDPM of 
@@ -87,8 +95,8 @@ class DDPM(Diffusion):
 
         mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
-        if k > 0:
-            z = torch.randn_like(x_k)
+        if k > 0: # NOTE: k = 1 of DDPM
+            z = torch.randn_like(x_k, generator=generator, device=x_k.device, dtype=x_k.dtype)
             if reverse_variance == 'beta':
                 sigma_k = torch.sqrt(beta_k) 
             else: 
@@ -105,6 +113,7 @@ class DDPM(Diffusion):
                         s : torch.Tensor,
                         denoiser : torch.nn.Module, 
                         n_samples : int,
+                        generator: torch.Generator | None = None,
                         reverse_variance : str = 'beta_tilde'
                         ) -> Tuple[torch.Tensor, list]:
         r""" 
@@ -124,10 +133,15 @@ class DDPM(Diffusion):
                                   and debugging 
         """
         N = x.shape[-1]                                  # was: N, _ = x.shape
-        x_k = torch.randn(n_samples, N, device=s.device)
+        x_k = torch.randn(n_samples, N, generator=generator, device=s.device, dtype=s.dtype)
         full_reverse = [x_k]
         for k in reversed(range(self.scheduler.K)):
-            x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s, reverse_variance=reverse_variance)
+            x_k = self.p_sample(model = denoiser, 
+                                x_k = x_k, 
+                                k=k, 
+                                s=s, 
+                                generator=generator,
+                                reverse_variance=reverse_variance)
             full_reverse.append(x_k)
         return x_k, full_reverse
 
