@@ -12,3 +12,5 @@ old/**/*
 src/rcdiff.egg-info
 runs/* 
 figures/*
+docs/*
+forecast_comparison.ipynb
