@@ -37,11 +37,10 @@ class DDPM(Diffusion):
             x_k (torch.Tensor) : noisy version `x_t^k` in DDPM.
             epsilon (torch.Tensor) : noise added to the original sample
         """
-        
-        epsilon = torch.randn_like(x_0.shape, 
-                                   generator=generator,
-                                   device=x_0.device, 
-                                   dtype=x_0.dtype)
+        epsilon = torch.randn(x_0.shape,
+                      generator=generator,
+                      device=x_0.device,
+                      dtype=x_0.dtype)
         alpha_bar_k = self.scheduler.get_alpha_bar(k, x_shape=x_0.shape)
         x_t = torch.sqrt(alpha_bar_k) * x_0 + torch.sqrt(1 - alpha_bar_k) * epsilon
         return x_t, epsilon

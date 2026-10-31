@@ -5,12 +5,20 @@ from rcdiff.diff.scheduler import BaseScheduler
 
 class Diffusion(ABC):
 
-    def __init__(self, scheduler : BaseScheduler) -> None:
+    def __init__(self, 
+                 scheduler : BaseScheduler,
+                 seed : int = 1234) -> None:
         super().__init__()
         self.scheduler = scheduler
-
+        self.seed = seed 
+        
     @abstractmethod
-    def q_sample(self, x_0 : torch.Tensor, k : torch.Tensor | int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def q_sample(self, 
+                 x_0 : torch.Tensor, 
+                 k : torch.Tensor | int, 
+                 generator: torch.Generator | None = None,
+                 **kwargs
+                 ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample from `q(x_t^{k}|x_t)`. From DDPM of `Ho et al. (2020)`: \n
                                 x_t^k ~ q(x_t^k | x_t) 
@@ -43,6 +51,8 @@ class Diffusion(ABC):
                         s : torch.Tensor,
                         denoiser : torch.nn.Module, 
                         n_samples : int,
+                        generator: torch.Generator | None = None,
+                        **kwargs
                         ) -> Tuple[torch.Tensor, list]:
         pass 
 
