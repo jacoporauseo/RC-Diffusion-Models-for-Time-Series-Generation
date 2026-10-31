@@ -105,8 +105,9 @@ class DDPM(Diffusion):
                         s : torch.Tensor,
                         denoiser : torch.nn.Module, 
                         n_samples : int,
-                        reverse_variance : str = 'beta_tilde'
-                        ) -> Tuple[torch.Tensor, list]:
+                        reverse_variance : str = 'beta_tilde',
+                        return_history = False
+                        ) -> Tuple[torch.Tensor, list | None]:
         r""" 
         Full Reverse Process of DDPM. Sample from p(x_t|s_{t-1}). 
 
@@ -128,6 +129,10 @@ class DDPM(Diffusion):
         full_reverse = [x_k]
         for k in reversed(range(self.scheduler.K)):
             x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s, reverse_variance=reverse_variance)
-            full_reverse.append(x_k)
-        return x_k, full_reverse
+            if return_history:
+                full_reverse.append(x_k)
+        if return_history:
+            return x_k, full_reverse
+        else:
+            return x_k, None
 
