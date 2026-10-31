@@ -11,12 +11,10 @@ class ParametersRWDN(RandomParams):
 
     Parameters
     ----------
-
-
         A_k (RandomWeight) : law of each random weight matrix `A_k in R^{hidden_size x in_size}`
         b_k  (RandomWeight) : law of each random bias `b_k in R^{hidden_size x 1}`
-        gamma : input scaling 
-        omega : bias scaling  
+        gamma (float) : input scaling 
+        omega (float) : bias scaling  
     """
     def __init__(self,
                  A_k   : RandomWeight,

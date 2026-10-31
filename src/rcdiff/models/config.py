@@ -8,9 +8,9 @@ from typing import Any, Optional, get_type_hints
 import torch
 import yaml
 
-from rcdiff.models.random_params import RandomWeight, ParametersESN
+from rcdiff.models.random_params import RandomWeight, ParametersESN, ParametersRWDN
 from rcdiff.models.encoders import ESN
-from rcdiff.models.denoisers import SimpleMLP
+from rcdiff.models.denoisers import SimpleMLP, RWDenoisingNetwork
 from rcdiff.diff import DDPM, BaseScheduler, DDIM, Diffusion
 
 
@@ -44,6 +44,18 @@ class ESNConfig:
     activ: str = "tanh"
     seed: int = 12345
 
+@dataclass
+class RWDNConfig:
+    hidden_size: int = 75
+    A_k: RandomWeightConfig = field(default_factory=lambda: RandomWeightConfig("uniform", sparsity=0, norm_type="l2"))
+    b_k: RandomWeightConfig = field(default_factory=lambda: RandomWeightConfig("uniform", sparsity=0, norm_type="euclidean"))
+    gamma: float = 0.5 
+    omega: float = 0.3
+    reservoir_size:int = 50
+    K: int = 100
+    seed: int = 12345
+
+
 
 @dataclass
 class DenoiserConfig:
@@ -62,7 +74,6 @@ class DiffusionConfig:
 
     def __post_init__(self,): 
         assert self.process in ['ddpm', 'ddim'] # to add for other processes
-
 
 
 
@@ -106,6 +117,21 @@ class ExperimentConfig:
 
 
 DENOISERS = {"simple_mlp": SimpleMLP}       
+
+
+def build_rwdn(cfg) -> RWDenoisingNetwork:
+    r = cfg.rwdn 
+    params = ParametersRWDN(A_k = RandomWeight(**asdict(r.A_k)),
+                            b_k = RandomWeight(**asdict(r.b_k)),
+                            gamma = 0.5, 
+                            omega = 0.3
+                            )
+    return RWDenoisingNetwork(in_dim=cfg.in_dim,
+                              hidden_size=r,
+                              reservoir_size=r.reservoir_size, 
+                              params = params,
+                              K = r.num_diffusion_steps)
+
 
 
 def build_esn(cfg):

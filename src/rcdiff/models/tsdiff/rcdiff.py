@@ -49,7 +49,7 @@ class RCDiff(TSDiffusionModel):
         start = time.time() 
 
         ks = list(range(self.diff.scheduler.K))[::-1]
-        print(len(ks))
+        
         for k in tqdm(ks):
 
             k_tensor = torch.full((T-self.spec.t0,), fill_value = k, dtype=torch.long, device=x.device)
@@ -111,6 +111,7 @@ class RCDiff(TSDiffusionModel):
             forecast (torch.Tensor) : (T_test, N, n_samples)
         """
 
+        # NOTE: change this just use a vectorized form...
         _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
         x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
         _, cond_test = self._build_conditioning_set(x_test, c_test)
@@ -124,10 +125,9 @@ class RCDiff(TSDiffusionModel):
                                                  s = s, 
                                                  denoiser = self.denoiser, 
                                                  n_samples = n_samples)
-            forecast.append(x_hat)                                             # (n_samples, N)
-            S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   # absorb realized x_{T+t+1}
+            forecast.append(x_hat)                                             
+            S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   
 
         return torch.stack(forecast)
 
-
-
+    
