@@ -6,11 +6,11 @@ University of St Gallen
 
 # Objective 
 
-Generative time series models aims to learn the conditional distribution of a (discrete) stochastic process $\bm{x}_t \in \mathbb{R}^N$: 
+Generative time series models aims to learn the conditional distribution of a (discrete) stochastic process $x_t \in \mathbb{R}^N$: 
 
-$$ p(\bm{x}_t | \bm{x}_{t-1}, ..., \bm{x}_{t-L}, \bm{c}_{t-1}, ..., \bm{c}_{t-L})  $$
+$$ p(x_t | x_{t-1}, ..., x_{t-L}, c_{t-1}, ..., c_{t-L})  $$
 
-for some exogenous covariates $\bm{c}_{t}$. This is the framework of many time-series models. Check out GlutonTs (https://ts.gluon.ai/stable/). TimeGrad is a diffusion probabilistic model (https://github.com/zalandoresearch/pytorch-ts) that leverages Recurrent Neural Networks to generate a compact representation of the time dimention while it applies the DDPM framework of Ho et al. (2020) to sample from the conditional distribution. 
+for some exogenous covariates $c_{t}$. This is the framework of many time-series models. Check out GlutonTs (https://ts.gluon.ai/stable/). TimeGrad is a diffusion probabilistic model (https://github.com/zalandoresearch/pytorch-ts) that leverages Recurrent Neural Networks to generate a compact representation of the time dimention while it applies the DDPM framework of Ho et al. (2020) to sample from the conditional distribution. 
 
 
 # RC Time Series Models
@@ -31,4 +31,4 @@ A typical time series diffusion model (as TimeGrad or Scoregrad) has three main 
 * The `esngrad.ipynb` tests the ESN + trained denoising MLP 
 * The `full_rc.ipynb` tests the ESN + RWDN
 * The `forecast_comparison.ipynb` comes from the paper of Jordi & Mika
-* The `simple_ddpm.ipynb` tests a simple DDPM with conditioning $X_{t-1} = [x_{t-1}, ..., x_{t-5}]$ to sample from $p_{\theta}(x_t|X_{t-1} )$ 
+* The `simple_ddpm.ipynb` tests a simple DDPM with conditioning $X_{t-1} = [x_{t-1}, ..., x_{t-5}]$ to sample from $p_{\theta}(x_t|X_{t-1})$ 
