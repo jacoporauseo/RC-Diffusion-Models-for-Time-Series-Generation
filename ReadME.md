@@ -24,5 +24,11 @@ A typical time series diffusion model (as TimeGrad or Scoregrad) has three main 
 * A **denoising network**. Much work has been done and there are thousants of possible architectures. A U-Net, CNNs or Vision Transformers are the most common ones. Here we suggest to use a Random Weight Neural Network. 
 
 
+# Notebooks schema (updated at 31.10)
 
 
+* The `Forward.ipynb` contains some code for checking the forward and reverse process of the diffusion 
+* The `esngrad.ipynb` tests the ESN + trained denoising MLP 
+* The `full_rc.ipynb` tests the ESN + RWDN
+* The `forecast_comparison.ipynb` comes from the paper of Jordi & Mika
+* The `simple_ddpm.ipynb` tests a simple DDPM with conditioning $X_{t-1} = [x_{t-1}, ..., x_{t-5}]$ to sample from $p_{\theta}(x_t|X_{t-1} )$ 

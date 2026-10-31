@@ -60,7 +60,11 @@ class ESNGrad(TSDiffusionModel):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, patience=max(1, sp.patience // 2), factor=0.5, min_lr=1e-6) 
 
+        # reproducibility
         gen = torch.Generator().manual_seed(sp.seed)   
+        gen2 = torch.Generator(device=x.device).manual_seed(sp.seed + 1)
+
+        # loss history
         history = {"iter": [], "train": [], "val": []}
         best_val, best_state, bad_evals = float("inf"), None, 0
         run_loss, n_run = torch.zeros(()), 0
@@ -74,7 +78,7 @@ class ESNGrad(TSDiffusionModel):
             x_batch, s_batch = x_tr[idx], s_tr[idx]                
             k = torch.randint(0, self.diff.scheduler.K, (sp.batch_size,), generator=gen)
 
-            x_noisy, noise = self.diff.q_sample(x_batch, k=k)
+            x_noisy, noise = self.diff.q_sample(x_batch, k=k, generator = gen2)
             eps_theta = self.denoiser(x_noisy, k=k, s=s_batch)
             loss = F.mse_loss(eps_theta, noise)
 
@@ -126,7 +130,8 @@ class ESNGrad(TSDiffusionModel):
     def conditional_distribution(self, 
                                  x : torch.Tensor,
                                  c : torch.Tensor | None = None,
-                                 n_samples : int = 1
+                                 n_samples : int = 1,
+                                 seed: int | None = None
                                  ): 
         r""" 
         Sample from:
@@ -149,46 +154,20 @@ class ESNGrad(TSDiffusionModel):
         # Take s_T and expand to (n_samples, R)
         s = self.esn.get_states(X=c)[-1]            
         s = s.unsqueeze(0).expand(n_samples, -1)   
-        x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, denoiser=self.denoiser, n_samples=n_samples)
+        gen = torch.Generator().manual_seed(seed if seed is not None else self.spec.seed)  
+        x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, 
+                                                        denoiser=self.denoiser, 
+                                                        n_samples=n_samples,
+                                                        generator=gen)
         return x_hat, full_reverse
-
-    ## OLD version: actually no need to do it in a sequential loop...
-    ## the ESN recursion already ensure that time is respected
-    # @torch.no_grad()
-    # def one_step_ahead_forecast(self, x_train, x_test, c_train = None, c_test = None, n_samples : int = 100):
-    #     """ 
-    #     Perform a recursive one-step ahead probabilistic forecast. 
-
-    #     Returns
-    #     -------
-    #         forecast (torch.Tensor) : (T_test, N, n_samples)
-    #     """
-
-    #     _, T_test = self._check_shapes(x_train, x_test, c_train, c_test)
-    #     x_train, cond_train = self._build_conditioning_set(x_train, c_train) 
-    #     _, cond_test = self._build_conditioning_set(x_test, c_test)
-
-    #     S = self.esn.get_states(X=cond_train.unsqueeze(0))  # (1, T_train, R)
-
-    #     forecast = []
-    #     for t in tqdm(range(T_test)):
-    #         s = S[:, -1].expand(n_samples, -1) # take last t (n_samples, R)
-    #         x_hat, _ = self.diff.reverse_process(x = x_train, 
-    #                                              s = s, 
-    #                                              denoiser = self.denoiser, 
-    #                                              n_samples = n_samples)
-    #         forecast.append(x_hat)                                             # (n_samples, N)
-    #         S = self.esn.update_states(S[:, -1:], cond_test[t].unsqueeze(0))   # absorb realized x_{T+t+1}
-
-    #     return torch.stack(forecast)
-
 
     @torch.no_grad()
     def one_step_ahead_forecast(self, 
                                 x_train, x_test, 
                                 c_train = None, c_test = None,
                                 n_samples: int = 100, 
-                                chunk_size: int | None = None):
+                                chunk_size: int | None = None,
+                                seed: int | None = None):
         """ 
         Perform a recursive one-step ahead probabilistic forecast. 
 
@@ -209,12 +188,15 @@ class ESNGrad(TSDiffusionModel):
 
         out = []
         chunk = chunk_size if chunk_size is not None else T_test
+        gen = torch.Generator().manual_seed(seed if seed is not None else self.spec.seed)  
+
         for i in tqdm(range(0, T_test, chunk)):
             s = S[i:i + chunk].repeat_interleave(n_samples, dim=0)   # (chunk*n_samples, R)
             x_hat, _ = self.diff.reverse_process(x=x_train, 
                                                  s=s, 
                                                  denoiser=self.denoiser, 
-                                                 n_samples=s.shape[0]
+                                                 n_samples=s.shape[0],
+                                                 generator = gen
                                                  )
             out.append(x_hat.view(-1, n_samples, N)) # (chuck, n_samples, N)
 
@@ -227,7 +209,8 @@ class ESNGrad(TSDiffusionModel):
                         x_train: torch.Tensor,
                         c_train: torch.Tensor | None = None,
                         n_samples: int = 50,
-                        chunk_size: int | None = None):
+                        chunk_size: int | None = None,
+                        seed: int | None = None):
         """
         Vectorized in-sample check, processed in chunks of time points. It uses t0 from the specs
 
@@ -257,65 +240,19 @@ class ESNGrad(TSDiffusionModel):
         chunk = chunk_size or L
         assert chunk > 0
 
+        gen = torch.Generator().manual_seed(seed if seed is not None else self.spec.seed)  
+
         forecast = []
         for i in tqdm(range(0, L, chunk), desc="In-sample check"):
             s_chunk = s[i:i + chunk].repeat_interleave(n_samples, dim=0)   # (c * n_samples, R)
             x_hat, _ = self.diff.reverse_process(x=x_train,                # x is only used for its shape[-1] = N
                                                 s=s_chunk,
                                                 denoiser=self.denoiser,
+                                                generator=gen,
                                                 n_samples=s_chunk.shape[0])
             forecast.append(x_hat.view(-1, n_samples, N))                  # (c, n_samples, N)
 
         return torch.cat(forecast)                                          # (T - t0, n_samples, N)
-
-
-
-
-
-
-    # CLAUDE FUNCTIONS... to be validated and not working... 
-    def save_checkpoint(self, path, cfg, history=None, extra=None):
-        """Save weights + config + data transforms to `path` (.pth) and a readable .yaml copy."""
-        assert cfg.esn.reservoir_size == self.esn.reservoir_size, "cfg and ESN disagree"
-        assert cfg.diffusion.num_timesteps == self.diff.scheduler.K, "cfg and scheduler disagree"
-        cfg = replace(cfg, train=self.spec)                    # store the training hparams actually used
-        path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
-        cpu = lambda sd: {k: v.detach().cpu() for k, v in sd.items()}
-        torch.save({
-            "format_version": 1,
-            "config": asdict(cfg),
-            "denoiser": cpu(self.denoiser.state_dict()),
-            "esn": cpu(self.esn.state_dict()),
-            "transform": self.transform,                       # plain floats / tensors only
-            "history": history if history is not None else self.history,
-            "extra": extra or {},
-            "torch_version": str(torch.__version__),
-        }, path)
-        cfg.to_yaml(path.with_suffix(".yaml"))
-
-    @classmethod
-    def load_checkpoint(cls, path, map_location="cpu"):
-        from rcdiff.models.config import (ExperimentConfig, _from_dict,
-                                        build_esn, build_denoiser, build_diffusion)
-        ck = torch.load(path, map_location=map_location)
-        cfg = _from_dict(ExperimentConfig, ck["config"])
-
-        esn = build_esn(cfg)
-        regenerated = {k: v.clone() for k, v in esn.state_dict().items()}
-        esn.load_state_dict(ck["esn"])
-        if not all(torch.allclose(regenerated[k], ck["esn"][k]) for k in regenerated):
-            print("Warning: ESN weights regenerated from the seed differ from the saved ones "
-                "(different torch version?). Using the saved ones.")
-
-        denoiser = build_denoiser(cfg)
-        denoiser.load_state_dict(ck["denoiser"]); denoiser.eval()
-
-        model = cls(diff=build_diffusion(cfg), esn=esn, denoiser=denoiser, spec=cfg.train)
-        model.transform, model.history = ck["transform"], ck["history"]
-        return model, cfg
-
-
-
 
 
 
