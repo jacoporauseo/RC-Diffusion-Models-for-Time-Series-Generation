@@ -10,7 +10,7 @@ Generative time series models aims to learn the conditional distribution of a (d
 
 $$ p(x_t | x_{t-1}, ..., x_{t-L}, c_{t-1}, ..., c_{t-L})  $$
 
-for some exogenous covariates $c_{t}$. This is the framework of many time-series models. Check out GlutonTs (https://ts.gluon.ai/stable/). TimeGrad is a diffusion probabilistic model (https://github.com/zalandoresearch/pytorch-ts) that leverages Recurrent Neural Networks to generate a compact representation of the time dimention while it applies the DDPM framework of Ho et al. (2020) to sample from the conditional distribution. 
+for some exogenous covariates $c_{t}$. This is the framework of many time-series models. TimeGrad is a diffusion probabilistic model (https://github.com/zalandoresearch/pytorch-ts) that leverages Recurrent Neural Networks to generate a compact representation of the time dimention while it applies the DDPM framework of Ho et al. (2020) to sample from the conditional distribution. 
 
 
 # RC Time Series Models

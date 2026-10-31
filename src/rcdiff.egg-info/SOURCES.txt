@@ -17,6 +17,7 @@ src/rcdiff/diff/ddpm.py
 src/rcdiff/diff/diffusion.py
 src/rcdiff/diff/scheduler.py
 src/rcdiff/eval/__init__.py
+src/rcdiff/eval/forecast_loss.py
 src/rcdiff/eval/mcs.py
 src/rcdiff/models/__init__.py
 src/rcdiff/models/config.py
