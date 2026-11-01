@@ -113,15 +113,15 @@ class DDPM(Diffusion):
                         denoiser : torch.nn.Module, 
                         n_samples : int,
                         generator: torch.Generator | None = None,
-                        return_history = False,
+                        return_history : bool = False,
                         reverse_variance : str = 'beta_tilde'
-                        ) -> Tuple[torch.Tensor, list]:
+                        ) -> Tuple[torch.Tensor, list | None]:
         r""" 
         Full Reverse Process of DDPM. Sample from p(x_t|s_{t-1}). 
 
         Parameters
         ---------
-            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N of shape (N,1)
+            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N 
             s (torch.Tensor)     : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
             n_samples (int)      : the number of obs to sample
             denoiser (nn.Module) : denoisers model (U-Net, MLP, RWDN, etc.)
@@ -132,11 +132,12 @@ class DDPM(Diffusion):
             full_reverse (list) : list of the history of the reverse process for plotting 
                                   and debugging 
         """
-        N = x.shape[-1]                                  # was: N, _ = x.shape
+        N = x.shape[-1]
         x_k = torch.randn(n_samples, N, generator=generator, device=s.device, dtype=s.dtype)
-        full_reverse = [x_k]
+        full_reverse = [x_k] if return_history else None
         for k in reversed(range(self.scheduler.K)):
             x_k = self.p_sample(model = denoiser, x_k = x_k, k=k, s=s, generator = generator, reverse_variance=reverse_variance)
-            full_reverse.append(x_k)
+            if return_history == True:
+                full_reverse.append(x_k) # type: ignore
         return x_k, full_reverse
 

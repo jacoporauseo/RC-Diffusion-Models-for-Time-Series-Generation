@@ -43,6 +43,7 @@ class DDIM(Diffusion):
                  k : int, 
                  k_prev : int, 
                  s : torch.Tensor,
+                 generator : torch.Generator | None = None,
                  eta : float = 1.0
                  ) -> torch.Tensor:
         r"""
@@ -78,7 +79,7 @@ class DDIM(Diffusion):
         direction_to_x_t = torch.sqrt(1 - alpha_bar_k_prev - sigma_k**2) * eps
 
         if eta > 0.0 and k_prev >= 0:
-            z = torch.randn_like(x_k)
+            z = torch.randn_like(x_k, generator=generator, device=x_k.device, dtype=x_k.dtype)
             random_noise = sigma_k * z
         else:
             random_noise = 0.0
@@ -86,5 +87,54 @@ class DDIM(Diffusion):
         x_prev = torch.sqrt(alpha_bar_k_prev) * predicted_x_0 + direction_to_x_t + random_noise
         return x_prev
 
-    def reverse_process(self,): 
-        return None 
+    @torch.no_grad()
+    def reverse_process(self, 
+                        x : torch.Tensor,
+                        s : torch.Tensor,
+                        denoiser : torch.nn.Module, 
+                        n_samples : int,
+                        generator: torch.Generator | None = None,
+                        return_history : bool = False,
+                        steps: int = 10,
+                        start: int | None = None, 
+                        **kwargs):
+        r""" 
+        Full Reverse Process of DDIM. Sample from p(x_t|s_{t-1}). 
+
+        Parameters
+        ---------
+            x (torch.Tensor)     : the vector x_t \in \mathcal{R}^N 
+            s (torch.Tensor)     : the econded vector s_{t-1} \in \mathcal{R}^S of shape [S,1] or [S,]
+            n_samples (int)      : the number of obs to sample
+            denoiser (nn.Module) : denoisers model (U-Net, MLP, RWDN, etc.)
+
+        Returns 
+        ------
+            x_k (torch.Tensor)  : the clean sample \hat{x}_t 
+            full_reverse (list) : list of the history of the reverse process for plotting 
+                                  and debugging 
+        """
+        N = x.shape[-1]
+        start = self.scheduler.K if start is None else start
+        assert start > steps > 0
+
+        # Subsequence τ = [0, steps, 2*steps, ..., K-1]
+        tau = list(range(0, start, steps))
+        if tau[-1] != start - 1:
+            tau.append(start - 1)
+
+        x_k = torch.randn(n_samples, N, generator=generator,
+                        device=s.device, dtype=s.dtype)
+        full_reverse = [x_k]
+
+        for k, k_prev in zip(reversed(tau), reversed(tau[:-1])):
+            x_k = self.p_sample(model=denoiser, 
+                                x_k=x_k,
+                                k=k, 
+                                k_prev=k_prev, 
+                                s=s,
+                                generator=generator, 
+                                **kwargs)
+            if return_history:
+                full_reverse.append(x_k)
+        return x_k, full_reverse
