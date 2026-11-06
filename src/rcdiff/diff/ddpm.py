@@ -95,7 +95,7 @@ class DDPM(Diffusion):
         mu = (1 / torch.sqrt(alpha_k)) * (x_k - (beta_k / torch.sqrt(1 - alpha_bar_k)) * eps)
 
         if k > 0: # NOTE: k = 1 of DDPM
-            z = torch.randn_like(x_k, generator=generator, device=x_k.device, dtype=x_k.dtype)
+            z = torch.randn(x_k.shape, generator=generator, device=x_k.device, dtype=x_k.dtype)
             if reverse_variance == 'beta':
                 sigma_k = torch.sqrt(beta_k) 
             else: 
