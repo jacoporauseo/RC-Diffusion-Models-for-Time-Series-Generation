@@ -131,7 +131,8 @@ class ESNGrad(TSDiffusionModel):
                                  x : torch.Tensor,
                                  c : torch.Tensor | None = None,
                                  n_samples : int = 1,
-                                 seed: int | None = None
+                                 seed: int | None = None,
+                                 **kwg
                                  ): 
         r""" 
         Sample from:
@@ -158,7 +159,8 @@ class ESNGrad(TSDiffusionModel):
         x_hat, full_reverse = self.diff.reverse_process(x=x, s=s, 
                                                         denoiser=self.denoiser, 
                                                         n_samples=n_samples,
-                                                        generator=gen)
+                                                        generator=gen, 
+                                                        **kwg)
         return x_hat, full_reverse
 
     @torch.no_grad()
