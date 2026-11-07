@@ -12,3 +12,15 @@ def print_tree(root=".", prefix="", ignore={".git", "__pycache__", ".ipynb_check
             print_tree(entry, prefix + extension, ignore)
 
 print_tree(".")
+
+
+
+
+
+
+
+
+
+
+
+
